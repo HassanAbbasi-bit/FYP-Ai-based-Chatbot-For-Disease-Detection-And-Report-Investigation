@@ -54,3 +54,9 @@ private-reports/
 
 # Logs
 *.log
+
+# Chroma Vector DB & Pytest Cache
+chroma_db/
+.pytest_cache/
+ai-backend/chroma_db/
+ai-backend/uploads/
