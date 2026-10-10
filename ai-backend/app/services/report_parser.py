@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
-import fitz  # PyMuPDF
+import pymupdf as fitz
 from PIL import Image
 import pytesseract
 

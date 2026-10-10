@@ -1,5 +1,12 @@
+import sys
 import json
 from pathlib import Path
+
+# Ensure ai-backend directory is in sys.path for direct root invocations
+_ai_dir = str(Path(__file__).resolve().parent.parent)
+if _ai_dir not in sys.path:
+    sys.path.insert(0, _ai_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

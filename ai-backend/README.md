@@ -13,7 +13,7 @@ This service powers the AI backend for the Medical Chatbot & Lab Report Analyzer
 
 ### 2. Start the FastAPI Development Server
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
 ```
 * **Interactive API Documentation (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
 * **Agreed Sample API Contract for Friend 2**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
