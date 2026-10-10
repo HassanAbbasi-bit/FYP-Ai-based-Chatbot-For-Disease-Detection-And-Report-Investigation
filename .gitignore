@@ -31,3 +31,26 @@ venv.bak/
 Thumbs.db
 .vscode/
 .idea/
+# JavaScript dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Private uploads and generated reports
+uploads/
+private-reports/
+
+# Logs
+*.log
