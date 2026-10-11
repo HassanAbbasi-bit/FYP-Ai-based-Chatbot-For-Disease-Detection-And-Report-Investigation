@@ -1,37 +1,37 @@
 # AI integration agreement — awaiting confirmation
 
-This document proposes a boundary between React, Express, and the friend's FastAPI service. **It is not a confirmed FastAPI API specification.** No friend-provided endpoint, address, schema, or authentication has been verified.
+This is our implemented Express boundary and a proposal for future integration. **No friend-provided FastAPI endpoint, address, authentication, or schema is confirmed.** The friend's implementation has not been modified, contacted, or inferred from a different branch.
 
-## Implemented React → Express demo contract
+## Confirmed current React → Express format
 
-- `POST /api/chat`, JSON body: `{ "message": "Hello" }`.
-- `message`: non-blank string, maximum 2,000 characters (JavaScript string length).
-- Success HTTP 200: `{ "mode": "demo", "reply": "Test reply: Express received your message. The AI service is not connected yet, so no medical analysis has been performed." }`.
-- Errors: `{ "error": { "code": "INVALID_MESSAGE", "message": "Message must be a non-blank string of at most 2,000 characters." } }`.
-- HTTP 400: `INVALID_MESSAGE` or `INVALID_JSON`; HTTP 413: `BODY_TOO_LARGE`; HTTP 404: `NOT_FOUND`; HTTP 500: `INTERNAL_ERROR`.
-- Non-streaming and stateless. No clinical output or health-data persistence.
-- Authentication checkpoint: chat now requires a MongoDB-backed session cookie, the configured application Origin, and an `X-CSRF-Token` obtained through `GET /api/auth/csrf`. See [authentication](authentication.md). This is our Express boundary; it does not confirm any FastAPI API or authentication mechanism.
+Chat now uses `POST /api/conversations/:conversationId/messages`, JSON `{message, requestId}`. The message is a non-blank string up to 2,000 JavaScript characters; requestId is a client-generated UUID v4 reused for the same intended submission. A valid MongoDB-backed account session, exact Origin and synchronizer CSRF token are required. Express derives ownership from the session. The earlier `/api/chat` route was removed.
 
-## Proposed future boundary
+Completed response: `{status:"completed", requestId, conversation:{id,title,createdAt,updatedAt}, messages:[userMessage,assistantMessage]}`. Each stored message is `{id,conversationId,requestId,role,content,sequence,mode,createdAt}`. Roles currently include user and assistant; assistant messages are created only server-side. The response mode is `demo`, and assistant text explicitly states that the AI service is not connected and no medical analysis was performed. Pending responses use HTTP 202; retry/conflict/failure contracts and pagination are documented in [conversations](conversations.md).
 
-React keeps using relative Express `/api` requests. Express validates requests and calls a FastAPI adapter that replaces `server/src/services/chat.js`. FastAPI owns Ollama access. Any proposed future response envelope or field mapping must be agreed before implementation; the demo's `mode` field must never disguise real AI output as a demo or vice versa.
+The internal generator is `server/src/services/chat.js`. The lifecycle supplies `{content,conversationId,requestId}` and expects `{mode:"demo",reply:string}`. It runs outside short database transactions. Ordered user/assistant messages and request lifecycles are stored separately. MongoDB transactions and lease tokens prevent duplicated publication and deletion races. This internal interface is **not a confirmed FastAPI request format**.
 
-## Information needed from the AI service owner
+## Proposed future Express → FastAPI boundary
 
-All items below are pending:
+React continues using same-origin Express routes and never accesses Ollama or AI credentials. An Express-side adapter could read bounded owner-authorized context from MongoDB, sorted by sequence, and map `{role,content}` rows to the friend's confirmed format. Context should include only complete prior exchanges plus the current user message, exclude duplicate current messages, and use a confirmed message/token budget. Do not send an entire indefinitely growing history by default. Conversation/request IDs must be scoped or mapped according to the agreed privacy contract.
 
-| Item | What to confirm |
+External generation should use timeouts/cancellation and an explicit retry/idempotency agreement. Current leases expire after 30 seconds and recovery is user-driven; a slower AI adapter needs lease renewal and fencing, or another agreed bounded execution strategy. The external service must not be invoked inside a database transaction callback because MongoDB may rerun that callback. A stale or deleted conversation's reply must not be published. External service retention and cancellation require confirmation; application deletion cannot promise deletion from a future external service without an implemented contract.
+
+The current service accepts demo output only. Real integration must explicitly permit and label `ai` mode, validate and bound the output, and preserve a safe failure envelope. Do not disguise real AI replies as demonstrations. No clinical rules are introduced here.
+
+## Information still needed from the AI owner
+
+| Item | Required confirmation |
 | --- | --- |
-| Base URL | FastAPI URL reachable from the Express machine; do not use an assumed IP |
-| Chat route | Exact endpoint path and HTTP method |
-| Request | Exact fields, types, required/optional rules, and an example JSON request |
-| Success | Exact response fields, types, and an example JSON response |
-| Errors | Status codes and example error JSON |
-| Authentication | Mechanism and header names; exchange credentials privately, never in source or chat |
+| Base URL and network | Actual address reachable from Express; secure connectivity between machines |
+| Route | Exact path and method |
+| Request | Fields, required/optional rules, example JSON and context format |
+| Response | Exact success/error envelopes and output limits |
+| Authentication | Mechanism/header names; credentials exchanged privately |
 | Transport | Streaming or non-streaming; framing if streaming |
-| Context | Stateless messages or conversation history/session IDs; ownership and retention |
-| Timing | Expected response time and timeout/cancellation behavior |
-| Network | Whether the two computers share a network or use different networks; agreed secure connectivity |
-| Retry | Idempotency and whether timed-out requests can safely be retried |
+| Context | Who owns history, context/token limits, session/conversation mapping |
+| Timing | Expected latency, timeout, cancellation and lease strategy |
+| Retry | Whether generation supports request IDs/idempotency after timeout |
+| Privacy | Retention, logging, onward data transfer and deletion behavior |
+| Health scope | Agreed disclaimer, escalation and clinical limitations before real output |
 
-Missing information does not block this demo. Add confirmed details here only after the friend supplies and verifies them. Keep secrets in ignored server-side environment configuration when real integration is implemented. Never expose secrets or call Ollama from React.
+Persistent demo chat does not depend on these answers. Add details here only when supplied and verified. Secrets remain in ignored server-only environment configuration.

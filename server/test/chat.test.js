@@ -1,5 +1,6 @@
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
 const { isolatedServer, client } = require("../test-support/database");
 const { readConfig } = require("../src/config");
 const { createApp } = require("../src/app");
@@ -13,6 +14,8 @@ async function signedIn() {
   const input = account();
   const result = await browser.request("/api/auth/register", { method: "POST", body: input });
   assert.equal(result.status, 201);
+  const conversation = await browser.request("/api/conversations", { method: "POST", body: {} });
+  browser.chatPath = `/api/conversations/${conversation.data.conversation.id}/messages`;
   return { browser, input, result };
 }
 before(async () => { fixture = await isolatedServer(); });
@@ -132,27 +135,27 @@ test("wrong password and missing account have the same generic login error", asy
   assert.equal(wrong.status, 401); assert.equal(absent.status, 401);
   assert.deepEqual(wrong.data, absent.data);
 });
-test("unauthenticated chat returns 401", async () => {
-  const result = await client(fixture).request("/api/chat", { method: "POST", body: { message: "Hello" } });
+test("unauthenticated conversation creation returns 401", async () => {
+  const result = await client(fixture).request("/api/conversations", { method: "POST", body: {} });
   assert.equal(result.status, 401); assert.equal(result.data.error.code, "UNAUTHENTICATED");
 });
 test("authenticated demo chat and 2000-character boundary succeed", async () => {
   const { browser } = await signedIn();
   for (const message of ["Hello", "x".repeat(2000)]) {
-    const result = await browser.request("/api/chat", { method: "POST", body: { message } });
-    assert.equal(result.status, 200); assert.equal(result.data.mode, "demo");
-    assert.match(result.data.reply, /no medical analysis/);
+    const result = await browser.request(browser.chatPath, { method: "POST", body: { message, requestId: randomUUID() } });
+    assert.equal(result.status, 200); assert.equal(result.data.messages[1].mode, "demo");
+    assert.match(result.data.messages[1].content, /no medical analysis/);
   }
 });
 test("blank, wrong-type, over-limit chat and browser identity fields are rejected", async () => {
   const { browser } = await signedIn();
   for (const body of [{ message: "" }, { message: "   " }, { message: 1 }, { message: {} }, { message: "x".repeat(2001) }, {}, { message: "Hi", userId: "someone-else" }]) {
-    assert.equal((await browser.request("/api/chat", { method: "POST", body })).status, 400);
+    assert.equal((await browser.request(browser.chatPath, { method: "POST", body: { requestId: randomUUID(), ...body } })).status, 400);
   }
 });
 test("CSRF is required on register, login, logout and authenticated chat", async () => {
   const { browser } = await signedIn();
-  for (const path of ["/api/auth/register", "/api/auth/login", "/api/auth/logout", "/api/chat"]) {
+  for (const path of ["/api/auth/register", "/api/auth/login", "/api/auth/logout", browser.chatPath]) {
     const result = await browser.request(path, { method: "POST", body: {}, csrf: false });
     assert.equal(result.status, 403); assert.equal(result.data.error.code, "CSRF_INVALID");
   }
@@ -160,15 +163,15 @@ test("CSRF is required on register, login, logout and authenticated chat", async
 });
 test("cross-origin writes are rejected even with a valid token", async () => {
   const { browser } = await signedIn();
-  assert.equal((await browser.request("/api/chat", { method: "POST", body: { message: "Hello" }, origin: "https://untrusted.example" })).status, 403);
+  assert.equal((await browser.request(browser.chatPath, { method: "POST", body: { message: "Hello", requestId: randomUUID() }, origin: "https://untrusted.example" })).status, 403);
 });
 test("a token from the pre-login session is rejected after ID rotation", async () => {
   const browser = client(fixture); await browser.bootstrap();
   const oldToken = browser.token;
   await browser.request("/api/auth/register", { method: "POST", body: account() });
-  const rejected = await browser.request("/api/chat", { method: "POST", body: { message: "Hello" }, csrf: oldToken });
+  const rejected = await browser.request("/api/conversations", { method: "POST", body: {}, csrf: oldToken });
   assert.equal(rejected.status, 403);
-  assert.equal((await browser.request("/api/chat", { method: "POST", body: { message: "Hello" } })).status, 200);
+  assert.equal((await browser.request("/api/conversations", { method: "POST", body: {} })).status, 201);
 });
 test("an authenticated session past its absolute deadline is invalidated", async () => {
   const { browser, result } = await signedIn();
@@ -182,9 +185,9 @@ test("an authenticated session past its absolute deadline is invalidated", async
 });
 test("malformed JSON and oversized bodies keep structured errors", async () => {
   const { browser } = await signedIn();
-  const bad = await browser.request("/api/chat", { method: "POST", raw: "{broken" });
+  const bad = await browser.request(browser.chatPath, { method: "POST", raw: "{broken" });
   assert.equal(bad.status, 400); assert.equal(bad.data.error.code, "INVALID_JSON");
-  const huge = await browser.request("/api/chat", { method: "POST", body: { message: "x".repeat(110000) } });
+  const huge = await browser.request(browser.chatPath, { method: "POST", body: { message: "x".repeat(110000) } });
   assert.equal(huge.status, 413); assert.equal(huge.data.error.code, "BODY_TOO_LARGE");
 });
 test("unique email database index exists", async () => {
@@ -219,8 +222,10 @@ test("login, registration and chat rate limits return 429", async () => {
     const input = account();
     assert.equal((await browser.request("/api/auth/register", { method: "POST", body: input })).status, 201);
     assert.equal((await browser.request("/api/auth/register", { method: "POST", body: account() })).status, 429);
-    assert.equal((await browser.request("/api/chat", { method: "POST", body: { message: "Hello" } })).status, 200);
-    assert.equal((await browser.request("/api/chat", { method: "POST", body: { message: "Hello" } })).status, 429);
+    const created = await browser.request("/api/conversations", { method: "POST", body: {} });
+    const path = `/api/conversations/${created.data.conversation.id}/messages`;
+    assert.equal((await browser.request(path, { method: "POST", body: { message: "Hello", requestId: randomUUID() } })).status, 200);
+    assert.equal((await browser.request(path, { method: "POST", body: { message: "Hello", requestId: randomUUID() } })).status, 429);
     assert.equal((await browser.request("/api/auth/login", { method: "POST", body: { email: input.email, password: "wrong testing passphrase" } })).status, 401);
     assert.equal((await browser.request("/api/auth/login", { method: "POST", body: { email: input.email, password } })).status, 429);
   } finally { await limited.close(); }

@@ -2,13 +2,13 @@
 
 ## Configure the database manually
 
-No personal database has been provisioned or configured. Put credentials only in ignored `server/.env`.
+The application does not provision a personal database. Preserve your existing working configuration, or put new credentials only in ignored `server/.env`.
 
-**Local option:** install MongoDB Community Server from the [official Windows instructions](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/), start its local service, and use `mongodb://127.0.0.1:27017/fyp_auth`. Keep it bound to the local machine. Do not expose an unauthenticated development database to a network.
+**Local option:** install MongoDB Community Server from the [official Windows instructions](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-windows/) and configure a development replica set. The conversation checkpoint requires transactions, so a standalone local service is insufficient. Use its explicit replica-set name in the URI and keep it bound to the local machine. See [conversation database requirements](conversations.md). Do not expose an unauthenticated development database to a network.
 
 **Atlas option:** use an existing deployment or choose the free tier if available, without selecting a paid plan. In Atlas, create a database user with access scoped to the application database and allow only your current development IP. Obtain the application's connection string from Atlas, fill its username/password privately, and include a database name such as `fyp_auth`. URI-encode any reserved characters in credentials. Do not use an unrestricted network allowlist or paste the URI into chat. Follow the [official Atlas connection guide](https://www.mongodb.com/docs/atlas/connect-to-database-deployment/).
 
-The database user must be able to create the `users` email unique index and `sessions` TTL index. Production permissions, backups, TLS, and retention require a separate deployment review.
+The database user must be able to create the `users` email unique index, `sessions` TTL index, and [conversation/message/request indexes](conversations.md), and read/write the application collections. Production permissions, backups, TLS, and retention require a separate deployment review.
 
 ## Environment
 
@@ -34,7 +34,7 @@ All requests use the same-origin `/api` proxy, with cookies sent automatically. 
 5. Success: registration HTTP 201 or login HTTP 200 with `{ "user": { "id": "<id>", "name": "Demo User", "email": "demo@example.com", "createdAt": "<timestamp>", "updatedAt": "<timestamp>" }, "csrfToken": "<new-token>" }`.
 6. Restore: `GET /api/auth/me` returns `{ "user": { ...public fields... } }`; missing/expired session returns HTTP 401. No hash is returned.
 7. Logout: `POST /api/auth/logout` with `{}` destroys the MongoDB session and expires its cookie.
-8. Chat: `POST /api/chat` with `{ "message": "Hello" }` requires a valid session, origin, and CSRF token. It still returns `{ "mode": "demo", "reply": "...no medical analysis has been performed." }`. No conversation is persisted and browser-supplied identity fields are rejected.
+8. Persistent chat now uses `/api/conversations` and its owner-scoped message routes. The old `/api/chat` endpoint was removed. Conversation writes require a session, exact Origin and CSRF token; replies remain DEMO. See [the current API contract](conversations.md).
 
 Names are trimmed and limited to 1–80 characters. Email is trimmed/lowercased, validated, and limited to 254 characters. Passwords are 15–128 JavaScript characters, including spaces; they are never trimmed or truncated. Only the documented request fields are allowed. Password confirmation is a client check, not a stored field. MongoDB's unique email index resolves duplicate-key races with HTTP 409.
 

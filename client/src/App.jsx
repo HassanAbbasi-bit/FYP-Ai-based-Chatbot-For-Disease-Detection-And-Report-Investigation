@@ -47,7 +47,7 @@ export default function App() {
       await api("/auth/logout", { method: "POST" });
       clearCsrf();
       setUser(null); // Unmounting Chat clears all in-memory messages and drafts.
-      setNotice("You are signed out. The previous conversation has been cleared.");
+      setNotice("You are signed out. Saved conversations remain private to your account.");
     } catch (error) {
       setLogoutError(`Could not confirm sign-out. ${error.message}`);
     } finally {

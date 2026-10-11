@@ -1,13 +1,14 @@
 // This helper always owns a temporary MongoDB process. It never reads .env or TEST/MONGODB_URI.
-const { MongoMemoryServer } = require("mongodb-memory-server");
+const { MongoMemoryReplSet } = require("mongodb-memory-server");
 const mongoose = require("mongoose");
 const { MongoStore } = require("connect-mongo");
 const { randomBytes } = require("node:crypto");
 const { createApp } = require("../src/app");
 const { readConfig } = require("../src/config");
 const { userSchema } = require("../src/models/User");
+const { initializeConversations, conversationModels } = require("../src/models/Conversation");
 
-async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000, chat: 1000, csrf: 1000 } } = {}) {
+async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000, chat: 1000, csrf: 1000, create: 1000, history: 10000 }, generation } = {}) {
   let mongo;
   let connection;
   let store;
@@ -19,18 +20,19 @@ async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000
     if (mongo) await mongo.stop();
   }
   try {
-    mongo = await MongoMemoryServer.create({ instance: { ip: "127.0.0.1" } });
+    mongo = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: "wiredTiger", ip: "127.0.0.1" } });
     const config = readConfig({ MONGODB_URI: mongo.getUri("fyp_auth_isolated"), SESSION_SECRET: randomBytes(32).toString("hex"), APP_ORIGIN: "http://localhost:5173" });
     connection = await mongoose.createConnection(config.mongoUri, { serverSelectionTimeoutMS: 1500, connectTimeoutMS: 1500, heartbeatFrequencyMS: 500 }).asPromise();
     const User = connection.model("User", userSchema);
     await User.init();
+    await initializeConversations(connection);
     await connection.db.collection("sessions").createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
-    store = MongoStore.create({ client: connection.getClient(), ttl: config.sessionTtlMs / 1000, autoRemove: "native" });
+    store = MongoStore.create({ client: connection.getClient(), dbName: connection.name, ttl: config.sessionTtlMs / 1000, autoRemove: "disabled" });
     store.on("error", () => {}); // Errors are asserted through HTTP; never log payloads.
-    const app = createApp({ config, connection, store, limits });
+    const app = createApp({ config, connection, store, limits, generation });
     server = app.listen(port, "127.0.0.1");
     await new Promise((resolve, reject) => { server.once("listening", resolve); server.once("error", reject); });
-    return { config, connection, store, User, mongo, base: `http://127.0.0.1:${server.address().port}`, close };
+    return { config, connection, store, User, ...conversationModels(connection), mongo, base: `http://127.0.0.1:${server.address().port}`, close };
   } catch (error) {
     await close();
     throw error;

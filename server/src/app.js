@@ -3,10 +3,10 @@ const session = require("express-session");
 const { authRoutes } = require("./routes/auth");
 const { userSchema } = require("./models/User");
 const { fail, errorHandler } = require("./middleware/errors");
-const { checkOrigin, requireAuth, csrfSynchronisedProtection, limiter } = require("./middleware/security");
-const { createDemoReply } = require("./services/chat");
+const { checkOrigin, requireAuth } = require("./middleware/security");
+const { conversationRoutes } = require("./routes/conversations");
 
-function createApp({ config, connection, store, limits = {} }) {
+function createApp({ config, connection, store, limits = {}, generation }) {
   if (!store) throw new Error("A MongoDB session store is required.");
   const app = express();
   const User = connection.models.User || connection.model("User", userSchema);
@@ -33,21 +33,14 @@ function createApp({ config, connection, store, limits = {} }) {
     resave: false, saveUninitialized: false, rolling: false,
     cookie: { httpOnly: true, secure: config.production, sameSite: "lax", path: "/", maxAge: config.sessionTtlMs },
   });
-  app.use(["/api/auth", "/api/chat"], checkOrigin(config.origin), sessions);
-  app.use(["/api/auth", "/api/chat"], (req, res, next) => {
+  app.use(["/api/auth", "/api/conversations"], checkOrigin(config.origin), sessions);
+  app.use(["/api/auth", "/api/conversations"], (req, res, next) => {
     // Keep cookie and Mongo expiry tied to the original sign-in time.
     if (req.session.authExpiresAt) req.session.cookie.maxAge = Math.max(0, req.session.authExpiresAt - Date.now());
     next();
   });
   app.use("/api/auth", authRoutes({ User, config, limits }));
-  app.post("/api/chat", requireAuth(User), limiter(limits.chat || 30, 60 * 1000), csrfSynchronisedProtection, (req, res) => {
-    const message = req.body?.message;
-    if (!req.body || Array.isArray(req.body) || Object.keys(req.body).some((key) => key !== "message") || typeof message !== "string" || !message.trim() || message.length > 2000) {
-      return fail(res, 400, "INVALID_MESSAGE", "Only message is accepted: a non-blank string of at most 2,000 characters.");
-    }
-    // Identity comes from req.user, never from the browser body. No conversation is saved.
-    res.json(createDemoReply());
-  });
+  app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation }));
   app.use((req, res) => fail(res, 404, "NOT_FOUND", "This endpoint does not exist."));
   app.use(errorHandler(connection));
   return app;

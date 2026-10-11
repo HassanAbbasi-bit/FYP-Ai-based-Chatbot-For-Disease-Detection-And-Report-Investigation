@@ -5,6 +5,7 @@ const { MongoStore } = require("connect-mongo");
 const { readConfig } = require("./config");
 const { createApp } = require("./app");
 const { userSchema } = require("./models/User");
+const { initializeConversations } = require("./models/Conversation");
 
 async function start() {
   let config;
@@ -34,6 +35,7 @@ async function start() {
   try {
     await connection.openUri(config.mongoUri, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 10000, maxPoolSize: 10 });
     await connection.model("User", userSchema).init();
+    await initializeConversations(connection);
     await connection.db.collection("sessions").createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
     // The TTL index was awaited above; avoid a second asynchronous index creation.
     store = MongoStore.create({ client: connection.getClient(), dbName: connection.name, ttl: config.sessionTtlMs / 1000, autoRemove: "disabled" });
@@ -52,6 +54,8 @@ async function start() {
       console.error(error.code === "EADDRINUSE"
         ? `Port ${config.port} is already in use. Stop the other backend before starting this one.`
         : "HTTP server could not start. Check the configured port.");
+    } else if (error.code === "REPLICA_SET_REQUIRED") {
+      console.error(error.message); // Authored message, never a database error payload.
     } else if (["querySrv", "queryTxt", "getaddrinfo"].includes(error.syscall)) {
       console.error("Database DNS lookup failed. Check your network DNS or use the full Atlas non-SRV connection string.");
     } else if (error.code === 18) {
