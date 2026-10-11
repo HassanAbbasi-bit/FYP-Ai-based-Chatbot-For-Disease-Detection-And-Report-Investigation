@@ -34,20 +34,25 @@ UNIT_FIXES = {
     "fl": "fL",
     "f": "fL",
     "po": "pg",
+    "pe": "pg",
     "m2": "%",
     "*": "%",
+    "e/dt": "g/dL",
+    "cells/yal": "/uL",
+    "cells/pat": "/uL",
+    "million/st": "10^6/uL",
 }
 
 # Standard test name canonicalization
 NAME_FIXES = {
     r"haemoglobin|hemopiobin|hemoglobin|hgb\b|hb\b": ("Hemoglobin", "g/dL", "13.0 - 17.0"),
-    r"total leucocyte count|total wae count|white blood cell|wbc\b": ("Total Leukocyte Count (WBC)", "/uL", "4000 - 10000"),
+    r"total leucocyte count|total wae count|white blood cell|wbc\b|tlc\b": ("Total Leukocyte Count (WBC)", "/uL", "4000 - 10000"),
     r"platelet count|platelets?|plt\b": ("Platelet Count", "/uL", "150000 - 410000"),
-    r"packed call volume|packed cell volume|p6|het\b|pcv\b|hematocrit": ("Hematocrit (PCV)", "%", "40 - 50"),
+    r"packed call volume|packed cell volume|p6|het\b|pcv\b|hematocrit|mematocrit|hct\b": ("Hematocrit (PCV)", "%", "40 - 50"),
     r"mean corpuscuar volume|mean corpuscular volume|mcv\b": ("MCV (Mean Corpuscular Volume)", "fL", "81 - 101"),
     r"mch\b": ("MCH", "pg", "27 - 32"),
     r"mchc\b": ("MCHC", "g/dL", "31.5 - 34.5"),
-    r"rbc count|total rbc count|red blood cell": ("RBC Count", "10^6/uL", "4.5 - 5.5"),
+    r"rbc count|total rbc count|red blood cell count|red blood cell": ("RBC Count", "10^6/uL", "4.5 - 5.5"),
     r"neutrophils?": ("Neutrophils", "%", "40 - 80"),
     r"lymphocytes?|lymohoeyts": ("Lymphocytes", "%", "20 - 40"),
     r"eosinophils?|essiophte": ("Eosinophils", "%", "1 - 6"),
@@ -82,7 +87,7 @@ def canonicalize_test_name(name: str) -> Tuple[str, Optional[str], Optional[str]
 def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
     """
     Extracts text from PDF using PyMuPDF. If pages have no digital text or file is an image,
-    falls back to Tesseract OCR.
+    falls back to Tesseract OCR with adaptive resolution scaling.
     """
     extracted_text = ""
     pages_processed = []
@@ -109,8 +114,24 @@ def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
         doc.close()
     elif suffix in [".png", ".jpg", ".jpeg"]:
         try:
-            img = Image.open(file_path)
-            extracted_text = pytesseract.image_to_string(img)
+            with Image.open(file_path) as img:
+                # Speed & accuracy: upscale low-res images (<1400px) so character height is readable
+                if img.width < 1400:
+                    scale = 1600.0 / img.width
+                    img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
+                elif max(img.size) > 2200:
+                    img.thumbnail((2000, 2000), Image.Resampling.LANCZOS)
+                
+                # Convert to grayscale
+                if img.mode != "L":
+                    img = img.convert("L")
+                
+                # Enhance contrast to sharpen faint laboratory receipt text
+                from PIL import ImageEnhance
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.8)
+
+                extracted_text = pytesseract.image_to_string(img, config="--oem 1")
             pages_processed.append(1)
         except Exception:
             extracted_text = "[Image OCR Unprocessed - Tesseract error]"
@@ -129,64 +150,82 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
 
     extracted_items = []
 
-    # 1. Primary Strategy: LLM Structured Extraction
-    try:
-        health = await ollama_client.check_health()
-        if health.get("connected"):
-            prompt = f"""You are a specialized medical laboratory report data extractor.
-Extract all clinical laboratory test results from the OCR text into strict, valid JSON.
-Ignore hospital address, doctors, and general headers.
+    # 1. Primary Strategy: Ultra-Fast Table Regex Extractor (< 5ms)
+    lines = raw_text.splitlines()
+    num_pattern = r"([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"
+    row_pattern = rf"^([A-Za-z\s()&{{}}\-]{{3,45}}?)\s+{num_pattern}\s*([A-Za-z/%*.]+)?\s*(?:([0-9]+(?:\.[0-9]+)?\s*[-–to]\s*[0-9]+(?:\.[0-9]+)?))?"
+    
+    table_items = []
+    ignored_keywords = [
+        "patient", "doctor", "dr.", "test name", "hospital", "clinic", "address", 
+        "phone", "date", "sample", "barcode", "bill", "invoice", "registered", 
+        "pathologist", "complete blood", "report status", "collection type", "avenue", 
+        "district", "delhi", "road", "street", "pin", "zip", "tel"
+    ]
+    for line in lines:
+        line_clean = line.strip()
+        match = re.search(row_pattern, line_clean)
+        if match:
+            t_name = match.group(1).strip()
+            t_val = match.group(2)
+            t_unit = match.group(3)
+            t_range = match.group(4)
+            if len(t_name) > 2 and not any(kw in t_name.lower() for kw in ignored_keywords):
+                table_items.append({
+                    "name": t_name,
+                    "value": t_val,
+                    "unit": t_unit,
+                    "reference_range": t_range
+                })
+
+    # If fast table parsing detected 4+ tests, use them immediately (runs in < 0.01s)
+    if len(table_items) >= 4:
+        extracted_items = table_items
+        date_match = re.search(r"(\d{1,2}[-/][A-Za-z]{3,9}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})", raw_text)
+        if date_match:
+            report_date = date_match.group(1)
+    else:
+        # 2. Secondary Strategy: Ollama LLM Structured Extraction for complex/unstructured formats
+        try:
+            health = await ollama_client.check_health()
+            if health.get("connected"):
+                lines = raw_text.splitlines()
+                relevant_lines = [s.strip() for s in lines if any(c.isdigit() for c in s) or any(k in s.lower() for k in ["date", "hemo", "haemo", "wbc", "rbc", "platelet", "mcv", "mch", "volume", "leucocyte", "neutro", "lympho", "test", "result"])]
+                clean_prompt_text = "\n".join(relevant_lines) if len(relevant_lines) >= 3 else raw_text
+
+                prompt = f"""You are a specialized medical laboratory report data extractor.
+Extract all clinical laboratory test results from the text into strict, valid JSON.
+Ignore clinic headers and addresses.
 Return ONLY valid JSON matching this schema:
 {{
   "report_date": "YYYY-MM-DD or null",
   "tests": [
     {{
       "name": "Test Name",
-      "value": "numerical or text value",
+      "value": "full numerical value (e.g. 4200 or 14.5)",
       "unit": "unit or null",
       "reference_range": "reference range or null"
     }}
   ]
 }}
 
-OCR Text:
-{raw_text}
+Lab Text:
+{clean_prompt_text}
 """
-            system_prompt = "Return valid JSON only. Never include conversational text."
-            raw_response = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=650, json_mode=True)
-            
-            clean_json = raw_response.strip()
-            if "```json" in clean_json:
-                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean_json:
-                clean_json = clean_json.split("```")[1].split("```")[0].strip()
+                system_prompt = "Return valid JSON only. Never include conversational text."
+                raw_response = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=550, json_mode=True)
+                
+                clean_json = raw_response.strip()
+                if "```json" in clean_json:
+                    clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean_json:
+                    clean_json = clean_json.split("```")[1].split("```")[0].strip()
 
-            data = json.loads(clean_json)
-            extracted_items = data.get("tests", [])
-            report_date = data.get("report_date")
-    except Exception:
-        # Fallback to heuristic parser if LLM fails
-        extracted_items = []
-
-    # 2. Secondary Strategy: Regex Line-by-Line Fallback
-    if not extracted_items:
-        lines = raw_text.splitlines()
-        for line in lines:
-            line_clean = line.strip()
-            # Match pattern: Name Value [Optional Range/Unit]
-            match = re.search(r"^([A-Za-z\s()]+?)\s+([0-9]+(?:\.[0-9]+)?)\s*(?:([0-9]+(?:\.[0-9]+)?\s*[-–to]\s*[0-9]+(?:\.[0-9]+)?))?\s*([A-Za-z/%*.]+)?", line_clean)
-            if match:
-                t_name = match.group(1).strip()
-                t_val = match.group(2)
-                t_range = match.group(3)
-                t_unit = match.group(4)
-                if len(t_name) > 2 and not any(kw in t_name.lower() for kw in ["age", "phone", "date", "dr", "lab", "page", "result"]):
-                    extracted_items.append({
-                        "name": t_name,
-                        "value": t_val,
-                        "unit": t_unit,
-                        "reference_range": t_range
-                    })
+                data = json.loads(clean_json)
+                extracted_items = data.get("tests", [])
+                report_date = data.get("report_date")
+        except Exception:
+            extracted_items = table_items
 
     # 3. Post-Processing: Standardize names, units, and evaluate reference ranges
     seen_names = set()
@@ -195,8 +234,10 @@ OCR Text:
         raw_name = item.get("name")
         val = item.get("value")
         
-        # Skip section headings or empty values
+        # Skip section headings, non-medical lines, or empty values
         if not raw_name or val is None or str(val).lower() in ["null", "none", ""]:
+            continue
+        if any(w in raw_name.lower() for w in ["patient", "doctor", "dr.", "hospital", "clinic", "address", "phone", "date", "sample", "barcode", "bill", "invoice", "registered", "pathologist"]):
             continue
 
         canonical_name, default_unit, default_range = canonicalize_test_name(raw_name)
@@ -213,15 +254,35 @@ OCR Text:
         except (ValueError, TypeError):
             num_val = val
 
-        # Handle common OCR decimal point missing in values (e.g. RBC 500 -> 5.0)
-        if canonical_name == "RBC Count" and isinstance(num_val, (int, float)):
-            if 100 <= num_val <= 700:
+        # Handle common OCR decimal point missing in values
+        if isinstance(num_val, (int, float)):
+            # RBC Count: e.g. 500 -> 5.0
+            if canonical_name == "RBC Count" and 100 <= num_val <= 700:
                 num_val = round(num_val / 100.0, 2)
-
-        # Handle common OCR decimal point missing in PCT (e.g. 35 -> 0.35)
-        if canonical_name == "PCT (Plateletcrit)" and isinstance(num_val, (int, float)):
-            if 10 <= num_val <= 90:
+            # PCT: e.g. 35 -> 0.35
+            elif canonical_name == "PCT (Plateletcrit)" and 10 <= num_val <= 90:
                 num_val = round(num_val / 100.0, 2)
+            # Hemoglobin: e.g. 172 -> 17.2
+            elif canonical_name == "Hemoglobin" and 90 <= num_val <= 250:
+                num_val = round(num_val / 10.0, 1)
+            # Hematocrit: e.g. 516 -> 51.6
+            elif canonical_name == "Hematocrit (PCV)" and 300 <= num_val <= 700:
+                num_val = round(num_val / 10.0, 1)
+            # MCV: e.g. 832 -> 83.2
+            elif canonical_name == "MCV (Mean Corpuscular Volume)" and 500 <= num_val <= 1300:
+                num_val = round(num_val / 10.0, 1)
+            # MCH: e.g. 294 -> 29.4
+            elif canonical_name == "MCH" and 200 <= num_val <= 450:
+                num_val = round(num_val / 10.0, 1)
+            # MCHC: e.g. 333 -> 33.3
+            elif canonical_name == "MCHC" and 250 <= num_val <= 450 and num_val > 100:
+                num_val = round(num_val / 10.0, 1)
+            # RDW-CV: e.g. 148 -> 14.8
+            elif canonical_name == "RDW-CV" and 100 <= num_val <= 250:
+                num_val = round(num_val / 10.0, 1)
+            # MPV: e.g. 73 -> 7.3
+            elif canonical_name == "MPV" and 50 <= num_val <= 160:
+                num_val = round(num_val / 10.0, 1)
 
         status, needs_review, clean_range = evaluate_lab_value(num_val, ref_range, canonical_name)
 

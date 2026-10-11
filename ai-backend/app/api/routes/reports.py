@@ -75,16 +75,22 @@ async def explain_medical_report(report_id: str):
 
         if target_test:
             findings_str = f"Specific Test of Interest:\n- {target_test['name']} ({target_test['test_id']}): {target_test['value']} {target_test['unit']} (Ref: {target_test['reference_range']}) -> Status: {target_test['status']}\n\n"
-            if abnormal_tests:
-                findings_str += "Other Out-of-Range Report Findings:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in abnormal_tests if t.get("test_id") != report_id])
+            other_abnormal = [t for t in abnormal_tests if t.get("test_id") != report_id][:2]
+            if other_abnormal:
+                findings_str += "Other Out-of-Range Report Findings:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in other_abnormal])
         elif abnormal_tests:
-            findings_str = "Report Abnormal Findings:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in abnormal_tests])
+            findings_str = "Report Abnormal Findings (Top Priorities):\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in abnormal_tests[:3]])
         else:
-            findings_str = "All key parameters appear within standard clinical reference ranges:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in tests[:5]])
+            findings_str = "All key parameters appear within standard clinical reference ranges:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in tests[:3]])
 
         prompt = f"""You are an educational medical assistant specializing in explaining lab reports to patients.
 Analyze these laboratory test results:
 {findings_str}
+
+Guidelines:
+1. Provide a concise overall summary in 2 sentences.
+2. Select and explain ONLY the top 2 most clinically significant findings in plain language (1-2 sentences each).
+3. Formulate 2 high-yield, practical questions to ask the doctor.
 
 Return valid JSON matching this schema:
 {{
@@ -92,7 +98,7 @@ Return valid JSON matching this schema:
   "findings": [
     {{
       "test_name": "Test Name",
-      "finding": "Summary of finding (e.g. Mildly below reference limit)",
+      "finding": "Summary of finding (e.g. Mildly above reference limit)",
       "plain_language_explanation": "What this test does and what this finding means in daily life.",
       "citations": [
         {{
@@ -109,7 +115,7 @@ Return valid JSON matching this schema:
 }}
 """
         try:
-            raw = await ollama_client.generate_response(prompt=prompt, system_prompt="You are a clinical educator. Return clean JSON only.", temperature=0.2, max_tokens=550, json_mode=True)
+            raw = await ollama_client.generate_response(prompt=prompt, system_prompt="You are a clinical educator. Return clean JSON only.", temperature=0.2, max_tokens=380, json_mode=True)
             clean_json = raw.strip()
             if "```json" in clean_json:
                 clean_json = clean_json.split("```json")[1].split("```")[0].strip()
