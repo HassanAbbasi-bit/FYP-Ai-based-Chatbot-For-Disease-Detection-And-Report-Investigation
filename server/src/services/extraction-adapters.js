@@ -14,7 +14,7 @@ async function limitedJson(response, signal, maxBytes = 262144) {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
   } catch { throw new ReportError(502, "INVALID_PROVIDER_RESULT", "The extraction service returned an invalid or oversized result."); }
 }
-function createAdapter(config, storage) {
+function createAdapter(config, storage, connection) {
   return async ({ report, origin, signal }) => {
     const { handle, size } = await storage.open(report.storageKey);
     let bytes;
@@ -29,6 +29,7 @@ function createAdapter(config, storage) {
       return sampleResult();
     }
     if (config.extractionProvider !== "fastapi") throw new ReportError(503, "EXTRACTION_UNAVAILABLE", "Extraction service not connected.");
+    if (connection) await require("./consent").assertConsent(connection, report.ownerId, "reports");
     const body = new FormData();
     body.append("file", new Blob([bytes], { type: report.fileType }), `report.${report.fileType === "application/pdf" ? "pdf" : report.fileType === "image/png" ? "png" : "jpg"}`);
     let response;

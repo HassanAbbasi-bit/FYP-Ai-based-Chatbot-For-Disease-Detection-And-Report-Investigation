@@ -4,7 +4,7 @@ import ConversationSidebar from "../components/ConversationSidebar";
 import ConversationDialog from "../components/ConversationDialog";
 import MessageHistory from "../components/MessageHistory";
 
-export default function Chat({ user, onExpired, onLogout, loggingOut, logoutError }) {
+export default function Chat({ user, onExpired, onLogout, loggingOut, logoutError, mode = "demo" }) {
   const chat = useConversations(onExpired);
   const [navigation, setNavigation] = useState(false);
   const [dialog, setDialog] = useState(null);
@@ -19,7 +19,7 @@ export default function Chat({ user, onExpired, onLogout, loggingOut, logoutErro
       <div className="account-bar"><span>Signed in as <strong>{user.name}</strong> ({user.email})</span><button className="secondary" onClick={onLogout} disabled={loggingOut}>{loggingOut ? "Signing out..." : "Sign out"}</button></div>
       {logoutError && <p className="error" role="alert">{logoutError}</p>}
       <p className="eyebrow">FYP · DEVELOPMENT</p><h1 id="chat-title">AI Health Assistant</h1>
-      <p className="demo-banner">DEMO mode — AI is not connected. No medical analysis is performed.</p>
+      <p className="demo-banner">{mode === "demo" ? "DEMO mode — AI is not connected. No medical analysis is performed." : "Configured AI service — consent required. Live model availability and clinical accuracy are not guaranteed."}</p>
       <p className="intro">Conversations are saved to your account and restored when you return. Use test messages only. You can permanently delete a conversation and its messages.</p>
       <button className="secondary mobile-history" aria-expanded={navigation} aria-controls="history-navigation" onClick={() => setNavigation((open) => !open)}>{navigation ? "Hide conversations" : "Show conversations"}</button>
     </header>

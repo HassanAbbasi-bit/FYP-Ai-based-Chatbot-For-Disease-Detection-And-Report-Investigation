@@ -11,7 +11,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
   const { Report, storage, config } = reports;
   const { ExtractionJob: Job, ExtractionResult: Result, ReportReview: Review } = extractionModels(connection);
   await Promise.all([Job.init(), Result.init(), Review.init()]);
-  const generate = adapter || createAdapter(config, storage);
+  const generate = adapter || createAdapter(config, storage, connection);
   const running = new Map(); let stopped = false, pumping = false, pendingPump;
   async function transaction(work) { let value; await connection.transaction(async (session) => { value = await work(session); }, { readPreference: "primary", readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } }); return value; }
   async function owned(scope, session) { const query = Report.findOne({ ...scope, status: "uploaded" }).select("+storageKey +sha256 +sampleVersion"); if (session) query.session(session); const report = await query; if (!report) throw reportNotFound(); return report; }
@@ -22,6 +22,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
   async function start(scope, requestId, expectedVersion) {
     const job = await transaction(async (session) => {
       const report = await owned(scope, session);
+      await require("./consent").accountFence(connection, scope.ownerId, session);
       const previous = await Job.findOne({ reportId: report._id, ownerId: scope.ownerId, requestId }).session(session);
       if (previous) return previous;
       const origin = availability(report);
@@ -44,6 +45,8 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
       if (!job) return;
       const report = await Report.findOne({ _id: job.reportId, ownerId: job.ownerId, status: "uploaded", activeExtractionId: id }).select("+sha256").session(session);
       if (!report) return;
+      await require("./consent").accountFence(connection, job.ownerId, session);
+      if (data && job.origin === "fastapi") await require("./consent").assertConsent(connection, job.ownerId, "reports", session);
       if ((report.reviewVersion || 0) !== job.expectedReviewVersion || report.sha256 !== job.sourceHash) { data = null; error = conflict(); }
       if (data) {
         // Validate every adapter, including test/demo adapters, before persisting untrusted values.

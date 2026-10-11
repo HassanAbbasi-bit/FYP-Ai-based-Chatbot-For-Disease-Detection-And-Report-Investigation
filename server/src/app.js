@@ -7,6 +7,9 @@ const { checkOrigin, requireAuth } = require("./middleware/security");
 const { conversationRoutes } = require("./routes/conversations");
 const { reportRoutes } = require("./routes/reports");
 const { extractionRoutes } = require("./routes/extractions");
+const { accountRoutes } = require("./routes/account");
+const { aiGateway } = require("./services/ai-gateway");
+const { symptomRoutes } = require("./routes/symptoms");
 
 function createApp({ config, connection, store, limits = {}, generation, reports }) {
   if (!store) throw new Error("A MongoDB session store is required.");
@@ -35,14 +38,17 @@ function createApp({ config, connection, store, limits = {}, generation, reports
     resave: false, saveUninitialized: false, rolling: false,
     cookie: { httpOnly: true, secure: config.production, sameSite: "lax", path: "/", maxAge: config.sessionTtlMs },
   });
-  app.use(["/api/auth", "/api/conversations", "/api/reports"], checkOrigin(config.origin), sessions);
-  app.use(["/api/auth", "/api/conversations", "/api/reports"], (req, res, next) => {
+  app.use(["/api/auth", "/api/conversations", "/api/reports", "/api/account", "/api/symptoms"], checkOrigin(config.origin), sessions);
+  app.use(["/api/auth", "/api/conversations", "/api/reports", "/api/account", "/api/symptoms"], (req, res, next) => {
     // Keep cookie and Mongo expiry tied to the original sign-in time.
     if (req.session.authExpiresAt) req.session.cookie.maxAge = Math.max(0, req.session.authExpiresAt - Date.now());
     next();
   });
   app.use("/api/auth", authRoutes({ User, config, limits }));
-  app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation }));
+  app.use("/api/account", requireAuth(User), accountRoutes({ connection, config }));
+  const gateway = aiGateway({ connection, config });
+  app.use("/api/symptoms", requireAuth(User), symptomRoutes(gateway));
+  app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation: generation || (config.chatProvider === "fastapi" ? { generateReply: gateway.chat, allowAi: true } : undefined) }));
   app.use("/api/reports", requireAuth(User), extractionRoutes(reports, limits), reportRoutes({ reports, limits }));
   app.use((req, res) => fail(res, 404, "NOT_FOUND", "This endpoint does not exist."));
   app.use(errorHandler(connection));

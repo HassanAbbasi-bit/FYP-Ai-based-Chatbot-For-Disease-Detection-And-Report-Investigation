@@ -17,6 +17,7 @@ const messageSchema = new mongoose.Schema({
   content: { type: String, required: true, maxlength: 4000 },
   sequence: { type: Number, required: true, min: 1 },
   mode: { type: String, enum: ["demo", "ai"], required: true },
+  structured: mongoose.Schema.Types.Mixed,
 }, { ...options, timestamps: { createdAt: true, updatedAt: false } });
 messageSchema.index({ conversationId: 1, sequence: 1 }, { unique: true });
 messageSchema.index({ conversationId: 1, requestId: 1, role: 1 }, { unique: true });
@@ -56,5 +57,5 @@ async function initializeConversations(connection) {
   }, { readPreference: "primary", readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } });
 }
 const publicConversation = (c) => ({ id: c._id.toString(), title: c.title, createdAt: c.createdAt, updatedAt: c.updatedAt });
-const publicMessage = (m) => ({ id: m._id.toString(), conversationId: m.conversationId.toString(), requestId: m.requestId, role: m.role, content: m.content, sequence: m.sequence, mode: m.mode, createdAt: m.createdAt });
+const publicMessage = (m) => ({ id: m._id.toString(), conversationId: m.conversationId.toString(), requestId: m.requestId, role: m.role, content: m.content, sequence: m.sequence, mode: m.mode, createdAt: m.createdAt, ...(m.structured ? { structured: m.structured } : {}) });
 module.exports = { conversationModels, initializeConversations, publicConversation, publicMessage };
