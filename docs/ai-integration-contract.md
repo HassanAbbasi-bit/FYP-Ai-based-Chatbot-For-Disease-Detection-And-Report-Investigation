@@ -10,6 +10,7 @@ This document proposes a boundary between React, Express, and the friend's FastA
 - Errors: `{ "error": { "code": "INVALID_MESSAGE", "message": "Message must be a non-blank string of at most 2,000 characters." } }`.
 - HTTP 400: `INVALID_MESSAGE` or `INVALID_JSON`; HTTP 413: `BODY_TOO_LARGE`; HTTP 404: `NOT_FOUND`; HTTP 500: `INTERNAL_ERROR`.
 - Non-streaming and stateless. No clinical output or health-data persistence.
+- Authentication checkpoint: chat now requires a MongoDB-backed session cookie, the configured application Origin, and an `X-CSRF-Token` obtained through `GET /api/auth/csrf`. See [authentication](authentication.md). This is our Express boundary; it does not confirm any FastAPI API or authentication mechanism.
 
 ## Proposed future boundary
 

@@ -26,3 +26,10 @@ button:focus-visible, textarea:focus-visible { outline: 3px solid #183247; outli
 .error { padding: 14px; margin-bottom: 18px; border: 1px solid #b76868; border-radius: 10px; color: #7a2424; background: #fff3f3; }
 .error p { margin-top: 0; }
 @media (max-width: 480px) { .chat-panel { padding: 18px; } .conversation { padding: 12px; } .bubble { max-width: 100%; } .composer-footer { align-items: stretch; flex-direction: column; } }
+.auth-panel { max-width: 520px; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.field { margin: 18px 0; }
+input { width: 100%; padding: 12px; font: inherit; color: inherit; border: 1px solid #9aafbd; border-radius: 10px; }
+input:focus-visible { outline: 3px solid #183247; outline-offset: 4px; }
+.full-width { width: 100%; }
+.account-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; overflow-wrap: anywhere; font-size: 14px; }
