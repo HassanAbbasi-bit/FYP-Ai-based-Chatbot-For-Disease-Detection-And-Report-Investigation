@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Environment Variables & Secrets
+.env
+.env.local
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OCR & Upload Temp Directories
+uploads/
+temp/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Chroma / Vector DB storage
+chroma_db/
+.chroma/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
