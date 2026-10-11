@@ -3,6 +3,8 @@ const options = { timestamps: true, strict: "throw", bufferCommands: false };
 const conversationSchema = new mongoose.Schema({
   ownerId: { type: mongoose.Schema.Types.ObjectId, required: true, immutable: true },
   title: { type: String, required: true, maxlength: 80, default: "New conversation" },
+  reportId: { type: mongoose.Schema.Types.ObjectId, immutable: true },
+  reviewVersion: { type: Number, immutable: true },
   nextSequence: { type: Number, required: true, default: 1, min: 1 },
   activeRequestId: { type: String, default: null },
   leaseToken: { type: String, default: null },
@@ -56,6 +58,6 @@ async function initializeConversations(connection) {
     await connection.models.Conversation.findOne({ _id: new mongoose.Types.ObjectId("000000000000000000000000") }).session(session).lean();
   }, { readPreference: "primary", readConcern: { level: "snapshot" }, writeConcern: { w: "majority" } });
 }
-const publicConversation = (c) => ({ id: c._id.toString(), title: c.title, createdAt: c.createdAt, updatedAt: c.updatedAt });
+const publicConversation = (c) => ({ id: c._id.toString(), title: c.title, createdAt: c.createdAt, updatedAt: c.updatedAt, ...(c.reportId ? { reportId: String(c.reportId), reviewVersion: c.reviewVersion } : {}) });
 const publicMessage = (m) => ({ id: m._id.toString(), conversationId: m.conversationId.toString(), requestId: m.requestId, role: m.role, content: m.content, sequence: m.sequence, mode: m.mode, createdAt: m.createdAt, ...(m.structured ? { structured: m.structured } : {}) });
 module.exports = { conversationModels, initializeConversations, publicConversation, publicMessage };

@@ -4,7 +4,7 @@ import ReportDetail from "../components/ReportDetail";
 import ReportDeleteDialog from "../components/ReportDeleteDialog";
 import { extractionApi } from "../api/extractions";
 
-export default function Reports({ onExpired, loggingOut, onDirtyChange }) {
+export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenChat }) {
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [limits, setLimits] = useState(null);
@@ -141,7 +141,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange }) {
         </button></li>)}</ul>
         {cursor && <button className="secondary" onClick={() => load(cursor)} disabled={loading || deleting || loggingOut}>Load more reports</button>}
       </section>
-      <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDirtyChange={dirtyChanged} onDelete={() => { if (guard()) { setDeleteError(""); setConfirming(true); } }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
+      <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDirtyChange={dirtyChanged} onOpenChat={context=>{if(guard())onOpenChat?.(context);}} onDelete={() => { if (guard()) { setDeleteError(""); setConfirming(true); } }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
     </div>
     {confirming && <ReportDeleteDialog busy={deleting} error={deleteError} onClose={() => setConfirming(false)} onConfirm={remove} />}
   </section>;

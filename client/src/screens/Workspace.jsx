@@ -8,6 +8,7 @@ export default function Workspace(props) {
   const [view, setView] = useState("chat");
   const dirty = useRef(false);
   const [account, setAccount] = useState(null);
+  const [chatContext,setChatContext]=useState(null);
   useEffect(() => { const c = new AbortController(); api("/account", { signal: c.signal }).then(setAccount).catch(() => {}); return () => c.abort(); }, []);
   function guard() { return !dirty.current || window.confirm("Discard unsaved report review edits?"); }
   return <>
@@ -18,10 +19,10 @@ export default function Workspace(props) {
       <button className="secondary" onClick={() => { if (guard()) setView("settings"); }}>Settings</button>
       {view === "reports" && <button className="secondary" disabled={props.loggingOut} onClick={() => { if (guard()) props.onLogout(); }}>Sign out</button>}
     </nav>
-    <div hidden={view !== "chat"}><Chat {...props} user={{ ...props.user, name: account?.name || props.user.name }} mode={account?.capabilities?.chat || "demo"} /></div>
+    <div hidden={view !== "chat"}><Chat key={chatContext?.key||'general'} {...props} initialContext={chatContext?.context} user={{ ...props.user, name: account?.name || props.user.name }} mode={account?.capabilities?.chat || "demo"} /></div>
     {view === "settings" && <Settings onExpired={props.onExpired} onSaved={setAccount} />}
     {view === "symptoms" && <Symptoms available={account?.capabilities?.symptoms} onExpired={props.onExpired} />}
-    {view === "reports" && <Reports onExpired={props.onExpired} loggingOut={props.loggingOut} onDirtyChange={(value) => { dirty.current = value; }} />}
+    {view === "reports" && <Reports onExpired={props.onExpired} loggingOut={props.loggingOut} onOpenChat={context=>{setChatContext({context,key:crypto.randomUUID()});setView('chat');}} onDirtyChange={(value) => { dirty.current = value; }} />}
     {view === "reports" && props.logoutError && <p className="error" role="alert">{props.logoutError}</p>}
   </>;
 }

@@ -1,0 +1,11 @@
+# Reviewed results and report conversations
+
+Real analysis is unavailable: the friend's existing explanation endpoint consumes its cached extraction, not a supplied corrected revision. Express does not call it for reviewed data. No invented endpoint or profile mapping is used.
+
+`POST /api/reports/:id/analyses` accepts `{requestId: UUID-v4, reviewVersion: integer}`. Ownership, current saved reviewed revision and current report consent are required. Only the dedicated server-marked synthetic sample is eligible, with its source hash checked; production rejects demos. Results copy saved review entries with null flags, unknown values preserved, no model/citations/clinical interpretation. All other uploads get an explicit unavailable response.
+
+Attempts persist separately from reviews with review/result IDs, processing state, origin, timestamps and null unavailable model/prompt versions. UUID retries reconcile the same attempt; new attempts require a new UUID. Twenty attempts per report, two workers per process. Queued local synthetic work can resume; expired running work fails as interrupted, without provider replay. Cancellation and deletion fence publication. Current report/review and account/consent writes serialize publication against correction, withdrawal and deletion. Older results remain visibly outdated; they never become results for newer data.
+
+`POST /api/conversations` supports the existing empty body or `{reportId,reviewVersion}` for an owned, current reviewed report. The binding is immutable. Every message read checks owned report/review; sending checks current revision and fences publication. Only dedicated local synthetic conversations can reply; ordinary report questions return `REPORT_CHAT_UNAVAILABLE` without transferring data. A changed revision requires a new conversation. Report deletion cascades its conversations, messages, jobs and analysis.
+
+No generated HTML is rendered. No source URLs exist in these demo results. Any future real adapter must validate bounded text, structured unknowns, approved range flags, escalation, exact revision identity, model/prompt provenance and citation URLs (HTTP/HTTPS without embedded credentials; never fetched by Express). Real report chat additionally needs an agreed reviewed-context payload and context-isolation contract.

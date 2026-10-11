@@ -1,7 +1,8 @@
 import { formatSize } from "../api/reports";
 import ReportPreview from "./ReportPreview";
 import ExtractionReview from "./ExtractionReview";
-export default function ReportDetail({ report, onExpired, onDelete, busy, onDirtyChange }) {
+import ReportResults from './ReportResults';
+export default function ReportDetail({ report, onExpired, onDelete, busy, onDirtyChange, onOpenChat }) {
   return <section className="report-detail" aria-labelledby="report-detail-title">
     <h2 id="report-detail-title">{report.displayName}</h2>
     <p>{report.fileType || "Type awaiting validation"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleString()}</p>
@@ -13,6 +14,7 @@ export default function ReportDetail({ report, onExpired, onDelete, busy, onDirt
     </> : <p role="status">{report.status === "deleting" ? "Deletion is incomplete. Retry Delete to finish removing the file." : "Upload is incomplete. Refresh after cleanup, then retry the selected file."}</p>}
     <button className="danger" disabled={busy} onClick={onDelete}>Delete report</button>
     </div>
+    {report.status==='uploaded'&&<ReportResults report={report} onExpired={onExpired} onOpenChat={onOpenChat}/>}
     {report.status === "uploaded" && <ExtractionReview key={report.id} report={report} onExpired={onExpired} onDirtyChange={onDirtyChange} />}
     </div>
   </section>;

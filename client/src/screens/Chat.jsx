@@ -4,8 +4,8 @@ import ConversationSidebar from "../components/ConversationSidebar";
 import ConversationDialog from "../components/ConversationDialog";
 import MessageHistory from "../components/MessageHistory";
 
-export default function Chat({ user, onExpired, onLogout, loggingOut, logoutError, mode = "demo" }) {
-  const chat = useConversations(onExpired);
+export default function Chat({ user, onExpired, onLogout, loggingOut, logoutError, mode = "demo", initialContext }) {
+  const chat = useConversations(onExpired, initialContext);
   const [navigation, setNavigation] = useState(false);
   const [dialog, setDialog] = useState(null);
   const conversation = chat.list.find((item) => item.id === chat.selected);
@@ -33,6 +33,7 @@ export default function Chat({ user, onExpired, onLogout, loggingOut, logoutErro
             <button className="secondary" onClick={() => setDialog({ action: "rename", conversation })} disabled={!conversation || chat.working || loggingOut}>Rename</button>
             <button className="secondary" onClick={() => setDialog({ action: "delete", conversation })} disabled={!conversation || chat.working || loggingOut}>Delete</button>
           </div></div>
+          {conversation?.reportId&&<p className="demo-banner">Report context: {thread.reportContext?.name||conversation.reportId} · saved review revision {conversation.reviewVersion}. {thread.reportContext?.outdated?'Outdated: open a new conversation for the current revision.':'Only dedicated synthetic samples can answer in demo. Real reviewed-report AI context is unavailable.'}</p>}
           <MessageHistory thread={thread} selected={chat.selected} onOlder={chat.loadOlder} onReload={chat.reload} />
           <p className="sending" role="status">{thread.sending ? "Sending message..." : thread.pending ? "Your message is kept for a safe retry." : ""}</p>
           {thread.error && <div className="error" role="alert"><p>{thread.error}</p>{thread.pending ? <button onClick={() => chat.send(true)} disabled={thread.sending || loggingOut}>Retry message</button> : thread.loaded && <button className="secondary" onClick={chat.reload} disabled={thread.loading || loggingOut}>Refresh messages</button>}</div>}
