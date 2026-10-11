@@ -153,7 +153,7 @@ OCR Text:
 {raw_text}
 """
             system_prompt = "Return valid JSON only. Never include conversational text."
-            raw_response = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1)
+            raw_response = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=650, json_mode=True)
             
             clean_json = raw_response.strip()
             if "```json" in clean_json:

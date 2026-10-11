@@ -55,10 +55,10 @@ Duration: {duration_str}
 Severity: {severity_str}
 
 Guidelines:
-1. Provide 2-3 plausible differential causes with calibrated uncertainty (likelihood: 'possible' or 'likely').
-2. Explain the medical rationale in plain, clear language.
-3. Formulate 2-3 specific, high-yield questions for the patient to ask their physician.
-4. Provide safe self-care and monitoring recommendations.
+1. Provide the top 2 plausible differential causes with calibrated uncertainty (likelihood: 'possible' or 'likely').
+2. Keep each rationale concise (strictly 1-2 sentences).
+3. Formulate 2 short, high-yield questions for the patient to ask their physician.
+4. Provide safe self-care guidance in 1-2 sentences.
 
 Return ONLY valid JSON matching this schema:
 {{
@@ -66,7 +66,7 @@ Return ONLY valid JSON matching this schema:
     {{
       "condition": "Condition Name",
       "likelihood": "possible",
-      "rationale": "Medical rationale explaining how the symptoms align."
+      "rationale": "Medical rationale (1-2 sentences)."
     }}
   ],
   "recommended_questions_for_doctor": [
@@ -77,7 +77,7 @@ Return ONLY valid JSON matching this schema:
 }}
 """
             system_prompt = "You are a clinical diagnostic educator. Return valid JSON only. Never issue a definitive diagnosis."
-            raw = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.2)
+            raw = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.2, max_tokens=420, json_mode=True)
             
             clean_json = raw.strip()
             if "```json" in clean_json:

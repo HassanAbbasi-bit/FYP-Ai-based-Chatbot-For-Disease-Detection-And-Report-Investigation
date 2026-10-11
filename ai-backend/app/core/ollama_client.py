@@ -6,22 +6,31 @@ class OllamaClient:
     def __init__(self, base_url: str = settings.OLLAMA_BASE_URL):
         self.base_url = base_url.rstrip("/")
         self.timeout = settings.MODEL_TIMEOUT_SECONDS
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=float(self.timeout),
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50)
+            )
+        return self._client
 
     async def check_health(self) -> Dict[str, Any]:
         """
         Pings Ollama service and lists installed models.
         """
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.get(f"{self.base_url}/api/tags")
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [m.get("name") for m in data.get("models", [])]
-                    return {
-                        "connected": True,
-                        "models": models,
-                        "base_url": self.base_url
-                    }
+            client = self.get_client()
+            res = await client.get(f"{self.base_url}/api/tags", timeout=5.0)
+            if res.status_code == 200:
+                data = res.json()
+                models = [m.get("name") for m in data.get("models", [])]
+                return {
+                    "connected": True,
+                    "models": models,
+                    "base_url": self.base_url
+                }
         except Exception as e:
             return {
                 "connected": False,
@@ -36,29 +45,42 @@ class OllamaClient:
         prompt: str,
         system_prompt: Optional[str] = None,
         model: str = settings.DEFAULT_MODEL,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = 450,
+        json_mode: bool = False
     ) -> str:
         """
-        Calls Ollama generate endpoint with timeout and exception safety.
+        Calls Ollama generate endpoint with hardware-optimized inference options.
         """
+        options: Dict[str, Any] = {
+            "temperature": temperature,
+            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_thread": settings.OLLAMA_NUM_THREAD,
+            "top_p": 0.9,
+            "top_k": 40
+        }
+        if max_tokens:
+            options["num_predict"] = max_tokens
+
         payload: Dict[str, Any] = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "temperature": temperature
-            }
+            "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+            "options": options
         }
+        if json_mode:
+            payload["format"] = "json"
         if system_prompt:
             payload["system"] = system_prompt
 
         try:
-            async with httpx.AsyncClient(timeout=float(self.timeout)) as client:
-                res = await client.post(f"{self.base_url}/api/generate", json=payload)
-                if res.status_code == 200:
-                    return res.json().get("response", "")
-                else:
-                    return f"Error from Ollama (status {res.status_code}): {res.text}"
+            client = self.get_client()
+            res = await client.post(f"{self.base_url}/api/generate", json=payload)
+            if res.status_code == 200:
+                return res.json().get("response", "")
+            else:
+                return f"Error from Ollama (status {res.status_code}): {res.text}"
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."
@@ -72,26 +94,36 @@ class OllamaClient:
         self,
         messages: List[Dict[str, str]],
         model: str = settings.DEFAULT_MODEL,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = 350
     ) -> str:
         """
-        Calls Ollama chat endpoint with message history.
+        Calls Ollama chat endpoint with persistent memory and token limiting.
         """
+        options: Dict[str, Any] = {
+            "temperature": temperature,
+            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_thread": settings.OLLAMA_NUM_THREAD,
+            "top_p": 0.9,
+            "top_k": 40
+        }
+        if max_tokens:
+            options["num_predict"] = max_tokens
+
         payload = {
             "model": model,
             "messages": messages,
             "stream": False,
-            "options": {
-                "temperature": temperature
-            }
+            "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+            "options": options
         }
         try:
-            async with httpx.AsyncClient(timeout=float(self.timeout)) as client:
-                res = await client.post(f"{self.base_url}/api/chat", json=payload)
-                if res.status_code == 200:
-                    return res.json().get("message", {}).get("content", "")
-                else:
-                    return f"Error from Ollama (status {res.status_code}): {res.text}"
+            client = self.get_client()
+            res = await client.post(f"{self.base_url}/api/chat", json=payload)
+            if res.status_code == 200:
+                return res.json().get("message", {}).get("content", "")
+            else:
+                return f"Error from Ollama (status {res.status_code}): {res.text}"
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."

@@ -109,7 +109,7 @@ Return valid JSON matching this schema:
 }}
 """
         try:
-            raw = await ollama_client.generate_response(prompt=prompt, system_prompt="You are a clinical educator. Return clean JSON only.", temperature=0.2)
+            raw = await ollama_client.generate_response(prompt=prompt, system_prompt="You are a clinical educator. Return clean JSON only.", temperature=0.2, max_tokens=550, json_mode=True)
             clean_json = raw.strip()
             if "```json" in clean_json:
                 clean_json = clean_json.split("```json")[1].split("```")[0].strip()

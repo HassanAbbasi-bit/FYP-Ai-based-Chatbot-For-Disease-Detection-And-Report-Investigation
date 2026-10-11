@@ -13,8 +13,9 @@ Guidelines:
 2. Explain medical terms in plain, easy-to-understand language.
 3. Express calibrated uncertainty (e.g., 'This could possibly indicate...', 'Common factors include...').
 4. Never issue a definitive clinical diagnosis or prescribe medications.
-5. Offer 2-3 relevant follow-up questions to help the patient clarify their symptoms.
-6. Always advise consulting a licensed physician.
+5. Offer 2 relevant follow-up questions to help the patient clarify their symptoms.
+6. Keep your response focused and concise (under 120 words) for fast, clear reading.
+7. Always advise consulting a licensed physician.
 """
 
 @router.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_internal_auth)])
@@ -44,7 +45,7 @@ async def process_chat_message(request: ChatRequest):
         messages.append({"role": "user", "content": clean_message})
 
         try:
-            llm_reply = await ollama_client.chat_conversation(messages)
+            llm_reply = await ollama_client.chat_conversation(messages, max_tokens=220)
             return ChatResponse(
                 reply=llm_reply,
                 suggested_follow_ups=[
