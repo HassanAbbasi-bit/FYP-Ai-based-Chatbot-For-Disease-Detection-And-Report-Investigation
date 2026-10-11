@@ -26,8 +26,9 @@ function readConfig(env = process.env) {
   const reportMaxTotalBytes = bounded("REPORT_MAX_TOTAL_BYTES", 100 * 1024 * 1024, 1024 * 1024 * 1024);
   if (reportMaxTotalBytes < reportMaxBytes) throw new Error("REPORT_MAX_TOTAL_BYTES must be at least REPORT_MAX_BYTES.");
   const extractionProvider = env.EXTRACTION_PROVIDER || "off";
-  const chatProvider = env.CHAT_PROVIDER || "demo";
-  if (!["demo", "fastapi"].includes(chatProvider)) throw new Error("CHAT_PROVIDER must be demo or fastapi.");
+  const chatProvider = env.CHAT_PROVIDER || (production ? 'off' : 'demo');
+  if (!['off','demo','fastapi'].includes(chatProvider)) throw new Error('CHAT_PROVIDER must be off, demo or fastapi.');
+  if(production&&chatProvider==='demo')throw new Error('Demo chat is disabled in production; configure fastapi or off.');
   if (!["off", "fastapi"].includes(extractionProvider)) throw new Error("EXTRACTION_PROVIDER must be off or fastapi.");
   const extractionDemoEnabled = env.EXTRACTION_DEMO_ENABLED === "true";
   if (env.EXTRACTION_DEMO_ENABLED && !["true", "false"].includes(env.EXTRACTION_DEMO_ENABLED)) throw new Error("EXTRACTION_DEMO_ENABLED must be true or false.");
@@ -40,6 +41,7 @@ function readConfig(env = process.env) {
   }
   return { mongoUri: env.MONGODB_URI, sessionSecret: env.SESSION_SECRET, origin, production, trustProxy: env.TRUST_PROXY === "loopback" ? "loopback" : false, port, host: "127.0.0.1", sessionTtlMs: SESSION_TTL_MS, cookieName: production ? "__Host-fyp.sid" : "fyp.sid",
     reportStorageDir, reportMaxBytes, reportMaxTotalBytes, reportMaxCount: bounded("REPORT_MAX_COUNT", 20, 1000), reportMaxPixels: bounded("REPORT_MAX_PIXELS", 20_000_000, 40_000_000),
+    exportFontPath: env.EXPORT_FONT_PATH || (process.platform === 'win32' ? 'C:\\Windows\\Fonts\\arial.ttf' : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
     extractionProvider, chatProvider, extractionDemoEnabled, aiServiceUrl, aiInternalKey: env.AI_INTERNAL_KEY, extractionTimeoutMs: bounded("EXTRACTION_TIMEOUT_MS", 45000, 60000) };
 }
 module.exports = { readConfig, SESSION_TTL_MS };

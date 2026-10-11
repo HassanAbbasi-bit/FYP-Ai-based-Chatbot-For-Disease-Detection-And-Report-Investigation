@@ -129,6 +129,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
   async function save(scope, { resultId, expectedVersion, rows, markReviewed }) {
     return transaction(async (session) => {
       const report = await owned(scope, session);
+      await require('./consent').accountFence(connection,scope.ownerId,session);
       if (String(report.currentResultId) !== resultId || (report.reviewVersion || 0) !== expectedVersion) throw conflict();
       if (expectedVersion >= 200) throw new ReportError(429, "REVIEW_LIMIT", "This report reached its 200-review-revision limit.");
       const result = await Result.findOne({ _id: resultId, reportId: report._id, ownerId: scope.ownerId }).session(session);

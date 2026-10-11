@@ -6,6 +6,7 @@ const conversationSchema = new mongoose.Schema({
   reportId: { type: mongoose.Schema.Types.ObjectId, immutable: true },
   reviewVersion: { type: Number, immutable: true },
   nextSequence: { type: Number, required: true, default: 1, min: 1 },
+  feedbackFence: { type: Number, default: 0, select: false },
   activeRequestId: { type: String, default: null },
   leaseToken: { type: String, default: null },
   leaseUntil: { type: Date, default: null },

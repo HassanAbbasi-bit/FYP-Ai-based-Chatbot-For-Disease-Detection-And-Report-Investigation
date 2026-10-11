@@ -68,7 +68,7 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
     } catch { /* Persisted jobs remain recoverable after a database outage. */ } finally { polling = false; }
   }
   async function read(scope) { const report = await scoped(scope); const jobs = await Analysis.find({ ownerId: scope.ownerId, reportId: scope._id }).sort({ createdAt: -1, _id: -1 }).limit(20).lean(); return { available: await eligible(report), realAvailable: false, analyses: jobs.map(j => publicAnalysis(j, report)) }; }
-  async function cancel(scope, id) { await scoped(scope); await Analysis.updateOne({ _id: id, reportId: scope._id, ownerId: scope.ownerId, state: { $in: ['queued','running'] } }, { $set: { state: 'cancelled', completedAt: new Date(), leaseToken: null, leaseUntil: null } }); }
+  async function cancel(scope, id) { return transaction(async session=>{await scoped(scope,session);await accountFence(connection,scope.ownerId,session);const job=await Analysis.findOne({_id:id,reportId:scope._id,ownerId:scope.ownerId}).session(session);if(!job)throw reportNotFound();if(['queued','running'].includes(job.state)){job.state='cancelled';job.completedAt=new Date();job.leaseToken=null;job.leaseUntil=null;await job.save({session});}return{cancelled:job.state==='cancelled',state:job.state};}); }
   const timer = autoRun ? setInterval(() => void tick(), 1000) : null; timer?.unref();
   if (autoRun) await tick();
   return { start, read, cancel, tick, Analysis, close: async () => { closed = true; clearInterval(timer); while (polling) await new Promise(r => setTimeout(r,10)); await Promise.allSettled([...active]); } };
