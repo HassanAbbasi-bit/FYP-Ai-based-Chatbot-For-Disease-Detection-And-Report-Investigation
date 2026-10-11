@@ -50,4 +50,12 @@ def get_report(report_id: str) -> Optional[Dict[str, Any]]:
         
     return None
 
+EXPLANATION_CACHE: Dict[str, Dict[str, Any]] = {}
+
+def save_explanation(key: str, data: Dict[str, Any]) -> None:
+    EXPLANATION_CACHE[key] = data
+
+def get_explanation(key: str) -> Optional[Dict[str, Any]]:
+    return EXPLANATION_CACHE.get(key)
+
 

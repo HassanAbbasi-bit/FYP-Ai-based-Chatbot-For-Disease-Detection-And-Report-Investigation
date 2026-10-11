@@ -9,7 +9,7 @@ from app.config import settings
 from app.core.security import verify_internal_auth
 from app.models.schemas import ReportExtractionResponse, ReportExplanationResponse, FindingItem, CitationItem
 from app.services.report_parser import extract_text_from_pdf_or_image, extract_structured_tests_ai
-from app.services.report_store import save_report, get_report
+from app.services.report_store import save_report, get_report, save_explanation, get_explanation
 from app.core.ollama_client import ollama_client
 
 router = APIRouter(tags=["Reports"])
@@ -64,6 +64,10 @@ async def explain_medical_report(report_id: str):
     tailored to the specific tests extracted from this report using llama3.2:3b.
     """
     cached = get_report(report_id)
+    cache_key = f"{cached.get('report_id', 'rep') if cached else 'rep'}_{report_id.lower()}"
+    cached_exp = get_explanation(cache_key)
+    if cached_exp:
+        return ReportExplanationResponse(**cached_exp)
     
     # If a specific report was uploaded, explain those exact tests
     if cached and cached.get("tests"):
@@ -71,18 +75,18 @@ async def explain_medical_report(report_id: str):
         abnormal_tests = [t for t in tests if t.get("status") in ["low", "high"]]
         normal_tests = [t for t in tests if t.get("status") == "normal"]
 
-        # Check if the user specified a particular test ID (e.g. t4) or test name
+        # Check if the user specified a particular test ID (e.g. t1, t4) or test name
         target_test = next((t for t in tests if t.get("test_id", "").lower() == report_id.lower()), None)
 
         if target_test:
             findings_str = f"Specific Test of Interest:\n- {target_test['name']} ({target_test['test_id']}): {target_test['value']} {target_test['unit']} (Ref: {target_test['reference_range']}) -> Status: {target_test['status']}\n\n"
-            other_abnormal = [t for t in abnormal_tests if t.get("test_id") != report_id][:2]
+            other_abnormal = [t for t in abnormal_tests if t.get("test_id") != report_id][:1]
             if other_abnormal:
                 findings_str += "Other Out-of-Range Report Findings:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in other_abnormal])
         elif abnormal_tests:
-            findings_str = "Report Abnormal Findings (Top Priorities):\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in abnormal_tests[:3]])
+            findings_str = "Report Abnormal Findings (Top Priorities):\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in abnormal_tests[:2]])
         else:
-            findings_str = "All key parameters appear within standard clinical reference ranges:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in tests[:3]])
+            findings_str = "All key parameters appear within standard clinical reference ranges:\n" + "\n".join([f"- {t['name']}: {t['value']} {t['unit']} (Ref: {t['reference_range']}) -> Status: {t['status']}" for t in tests[:2]])
 
         prompt = f"""You are an educational medical assistant specializing in explaining lab reports to patients.
 Analyze these laboratory test results:
@@ -92,8 +96,8 @@ CRITICAL CLINICAL RULES:
 1. High hemoglobin or high hematocrit indicates erythrocytosis, hemoconcentration, or dehydration. NEVER claim elevated hemoglobin or hematocrit indicates anemia (anemia is ONLY caused by LOW hemoglobin).
 2. High lymphocytes indicates an immune, inflammatory, or viral response (lymphocytosis). Low lymphocytes indicates lymphopenia.
 3. High total leukocyte (WBC) count indicates leukocytosis. Low count indicates leukopenia.
-4. Provide a concise overall summary in 2 sentences.
-5. Select and explain ONLY the top 2 findings in plain language (1-2 sentences each).
+4. Provide a concise overall summary in 1-2 sentences.
+5. Explain the finding in 1 clear sentence without medical jargon.
 6. Formulate 2 high-yield, practical questions to ask the doctor.
 
 Return valid JSON matching this schema:
@@ -102,7 +106,7 @@ Return valid JSON matching this schema:
   "findings": [
     {{
       "test_name": "Test Name",
-      "finding": "Summary of finding (e.g. Mildly above reference limit)",
+      "finding": "Summary of finding (e.g. Above reference limit)",
       "plain_language_explanation": "What this test does and what this finding means in daily life.",
       "citations": [
         {{
@@ -123,7 +127,7 @@ Return valid JSON matching this schema:
                 prompt=prompt, 
                 system_prompt="You are a clinical educator. Never contradict hematological facts. Output valid JSON only.", 
                 temperature=0.1, 
-                max_tokens=360, 
+                max_tokens=240, 
                 json_mode=True
             )
             clean_json = raw.strip()
@@ -146,7 +150,7 @@ Return valid JSON matching this schema:
                     expl = re.sub(r"(?i)\b(indicat(ing|es)|suggest(ing|s)|cause(d)?\s+by)\s+anemia\b", "indicating potential hemoconcentration or erythrocytosis", expl)
                     f["plain_language_explanation"] = expl
 
-            return ReportExplanationResponse(
+            resp_obj = ReportExplanationResponse(
                 report_id=report_id,
                 summary=summary,
                 findings=[FindingItem(**f) for f in findings_raw],
@@ -155,9 +159,11 @@ Return valid JSON matching this schema:
                     "Are any dietary or lifestyle adjustments recommended based on these results?"
                 ])
             )
+            save_explanation(cache_key, resp_obj.model_dump())
+            return resp_obj
         except Exception:
             # Fallback to structured finding generation based on actual tests
-            eval_tests = [target_test] if target_test else (abnormal_tests or tests[:3])
+            eval_tests = [target_test] if target_test else (abnormal_tests or tests[:2])
             findings_list = [
                 FindingItem(
                     test_name=t["name"],
@@ -171,7 +177,7 @@ Return valid JSON matching this schema:
                     ]
                 ) for t in eval_tests
             ]
-            return ReportExplanationResponse(
+            fb_obj = ReportExplanationResponse(
                 report_id=report_id,
                 summary=f"Analysis of laboratory parameters: {len(abnormal_tests)} values flagged outside standard reference limits.",
                 findings=findings_list,
@@ -180,6 +186,8 @@ Return valid JSON matching this schema:
                     "Is follow-up testing recommended?"
                 ]
             )
+            save_explanation(cache_key, fb_obj.model_dump())
+            return fb_obj
 
 
     # Standard grounded fallback if no report uploaded or Ollama offline
