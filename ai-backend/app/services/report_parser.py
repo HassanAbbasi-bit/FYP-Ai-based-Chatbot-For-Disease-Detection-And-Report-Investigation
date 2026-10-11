@@ -18,7 +18,9 @@ if Path(settings.TESSERACT_CMD).exists():
 UNIT_FIXES = {
     "fst": "g/dL",
     "fst.": "g/dL",
-    "ofet": "g/dL",
+    "ofet": "pg",
+    "oiet": "pg",
+    "diet": "pg",
     "joumm": "/uL",
     "youmm": "/uL",
     "umm": "/uL",
@@ -28,17 +30,20 @@ UNIT_FIXES = {
     "milvourm": "10^6/uL",
     "ff": "fL",
     "ff.": "fL",
+    "fl": "fL",
+    "f": "fL",
     "po": "pg",
+    "m2": "%",
     "*": "%",
 }
 
 # Standard test name canonicalization
 NAME_FIXES = {
-    r"haemoglobin|hemopiobin|hgb\b|hb\b": ("Hemoglobin", "g/dL", "13.0 - 17.0"),
+    r"haemoglobin|hemopiobin|hemoglobin|hgb\b|hb\b": ("Hemoglobin", "g/dL", "13.0 - 17.0"),
     r"total leucocyte count|total wae count|white blood cell|wbc\b": ("Total Leukocyte Count (WBC)", "/uL", "4000 - 10000"),
     r"platelet count|platelets?|plt\b": ("Platelet Count", "/uL", "150000 - 410000"),
-    r"packed call volume|packed cell volume|p6|het\b|pcv\b": ("Hematocrit (PCV)", "%", "40 - 50"),
-    r"mean corpuscuar volume|mcv\b": ("MCV (Mean Corpuscular Volume)", "fL", "81 - 101"),
+    r"packed call volume|packed cell volume|p6|het\b|pcv\b|hematocrit": ("Hematocrit (PCV)", "%", "40 - 50"),
+    r"mean corpuscuar volume|mean corpuscular volume|mcv\b": ("MCV (Mean Corpuscular Volume)", "fL", "81 - 101"),
     r"mch\b": ("MCH", "pg", "27 - 32"),
     r"mchc\b": ("MCHC", "g/dL", "31.5 - 34.5"),
     r"rbc count|total rbc count|red blood cell": ("RBC Count", "10^6/uL", "4.5 - 5.5"),
@@ -47,15 +52,20 @@ NAME_FIXES = {
     r"eosinophils?|essiophte": ("Eosinophils", "%", "1 - 6"),
     r"monocytes?|monoeytes": ("Monocytes", "%", "2 - 10"),
     r"basophils?|besoptite": ("Basophils", "%", "0 - 1"),
+    r"absolute leu[ck]ocyte count|alc\b": ("Absolute Leucocyte Count", "/uL", "2000 - 7000"),
     r"mpv\b": ("MPV", "fL", "7.5 - 11.5"),
-    r"rdw[\s-]cv": ("RDW-CV", "%", "11.6 - 14.0"),
-    r"rdw[\s-]sd": ("RDW-SD", "fL", "39 - 46"),
+    r"r[do]w[\s-]cv|red cell distribution.*cv|rdw\b": ("RDW-CV", "%", "11.6 - 14.0"),
+    r"r[do]w[\s-]sd|red cell distribution.*sd": ("RDW-SD", "fL", "39 - 46"),
+    r"\bpct\b|plateletcrit": ("PCT (Plateletcrit)", "%", "0.10 - 0.40"),
+    r"\bp[do]w\b|platelet distribution": ("PDW", "%", "9.0 - 17.0"),
 }
 
 def normalize_unit(raw_unit: Optional[str], default_unit: Optional[str] = None) -> Optional[str]:
     if not raw_unit:
         return default_unit
-    clean = raw_unit.strip().lower()
+    clean = re.sub(r"[^a-zA-Z0-9/%^.]", "", raw_unit.lower())
+    if clean in ["na", "null", "none", ""]:
+        return default_unit
     for pattern, fixed in UNIT_FIXES.items():
         if clean == pattern or clean.startswith(pattern):
             return fixed
@@ -196,24 +206,29 @@ OCR Text:
         unit = normalize_unit(item.get("unit"), default_unit)
         ref_range = item.get("reference_range") or default_range
 
-        status, needs_review = evaluate_lab_value(val, ref_range)
-
         # Parse numeric value if possible
         try:
             num_val = float(str(val).replace(",", "").strip())
         except (ValueError, TypeError):
             num_val = val
 
+        # Handle common OCR decimal point missing in values (e.g. RBC 500 -> 5.0)
+        if canonical_name == "RBC Count" and isinstance(num_val, (int, float)):
+            if 100 <= num_val <= 700:
+                num_val = round(num_val / 100.0, 2)
+
+        status, needs_review, clean_range = evaluate_lab_value(num_val, ref_range, canonical_name)
+
         test_entry = {
             "test_id": f"t{idx}",
             "name": canonical_name,
             "value": num_val,
             "unit": unit or "N/A",
-            "reference_range": ref_range or "Not specified",
+            "reference_range": clean_range or ref_range or "Not specified",
             "status": status,
             "page": 1,
-            "needs_review": needs_review or (status in ["low", "high"]),
-            "review_reason": f"Value ({num_val}) outside reference range ({ref_range})" if status in ["low", "high"] else None
+            "needs_review": needs_review,
+            "review_reason": f"Value ({num_val}) outside reference range ({clean_range})" if status in ["low", "high"] else None
         }
         tests.append(test_entry)
 
