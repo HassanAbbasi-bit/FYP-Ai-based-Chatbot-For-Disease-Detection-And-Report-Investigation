@@ -49,7 +49,7 @@ function createApp({ config, connection, store, limits = {}, generation, reports
   const gateway = aiGateway({ connection, config });
   app.use("/api/symptoms", requireAuth(User), symptomRoutes(gateway));
   app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation: generation || (config.chatProvider === "fastapi" ? { generateReply: gateway.chat, allowAi: true } : undefined) }));
-  app.use("/api/reports", requireAuth(User), extractionRoutes(reports, limits), reportRoutes({ reports, limits }));
+  app.use("/api/reports", requireAuth(User), require('./routes/analysis').analysisRoutes(reports), extractionRoutes(reports, limits), reportRoutes({ reports, limits }));
   app.use((req, res) => fail(res, 404, "NOT_FOUND", "This endpoint does not exist."));
   app.use(errorHandler(connection));
   return app;

@@ -26,7 +26,11 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       const conversation = await Conversation.findOne(scope).session(session);
       if (!conversation) throw notFound();
       await require("./consent").accountFence(connection, scope.ownerId, session);
-      if (allowAi) await require("./consent").assertConsent(connection, scope.ownerId, "chat", session);
+      if (conversation.reportId) {
+        const context = await require('./report-context').reportContext(connection, scope.ownerId, conversation.reportId, conversation.reviewVersion, session, true);
+        if (context.report.sampleVersion !== 'synthetic-v1' || !connection.fypReportDemo) throw new (require('./report-errors').ReportError)(503,'REPORT_CHAT_UNAVAILABLE','The AI service has no confirmed corrected-report chat contract. This conversation is bound to your report; no report data has been sent.');
+        await require('./consent').assertConsent(connection, scope.ownerId, 'reports', session);
+      } else if (allowAi) await require("./consent").assertConsent(connection, scope.ownerId, "chat", session);
       const jobScope = { ownerId: scope.ownerId, conversationId: scope._id, requestId };
       let job = await ChatRequest.findOne(jobScope).session(session);
       if (job && job.content !== content) throw new ConversationError(409, "REQUEST_ID_REUSED", "This request ID was already used for different message text. Retry the original message.");
@@ -68,7 +72,11 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       const completed = new Set((await ChatRequest.find({ conversationId: scope._id, ownerId: scope.ownerId, status: "completed", requestId: { $in: prior.map((m) => m.requestId) } }).lean()).map((r) => r.requestId));
       const pairs = new Map(); for (const m of prior) { const roles = pairs.get(m.requestId) || new Set(); roles.add(m.role); pairs.set(m.requestId, roles); }
       const history = prior.reverse().filter((m) => completed.has(m.requestId) && pairs.get(m.requestId).size === 2).slice(-6).map(({ role, content: previous }) => ({ role, content: previous.slice(0, 2000) }));
-      reply = await generateReply({ content, conversationId: scope._id.toString(), requestId, ownerId: scope.ownerId, history });
+      const c = await Conversation.findOne(scope).lean();
+      if (c?.reportId) {
+        const context = await require('./report-context').reportContext(connection, scope.ownerId, c.reportId, c.reviewVersion);
+        reply = { mode: 'demo', reply: `DEMO — synthetic report conversation, reviewed revision ${c.reviewVersion}. No medical reasoning is connected. Saved entries: ${context.review.rows.filter(r=>!r.removed).map(r=>`${r.testName}: ${r.rawValue ?? 'unknown'} ${r.units ?? '(unit unknown)'}`).join('; ')}`.slice(0,4000), structured: { origin: 'synthetic-demo', sources: [], disclaimer: 'This demonstration copies synthetic reviewed data. It does not answer medical questions.' } };
+      } else reply = await generateReply({ content, conversationId: scope._id.toString(), requestId, ownerId: scope.ownerId, history });
       if (!["demo", ...(allowAi ? ["ai"] : [])].includes(reply?.mode) || typeof reply.reply !== "string" || !reply.reply.trim() || reply.reply.length > 4000) throw new Error("Invalid reply");
     } catch (error) {
       await transaction(async (session) => {
@@ -85,6 +93,7 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       const conversation = await Conversation.findOne(scope).session(session);
       if (!conversation) throw notFound();
       await require("./consent").accountFence(connection, scope.ownerId, session);
+      if (conversation.reportId) { await require('./report-context').reportContext(connection, scope.ownerId, conversation.reportId, conversation.reviewVersion, session, true); await require('./consent').assertConsent(connection, scope.ownerId, 'reports', session); }
       if (reply.mode === "ai") await require("./consent").assertConsent(connection, scope.ownerId, "chat", session);
       const job = await ChatRequest.findOne(jobScope).session(session);
       if (!job || conversation.leaseToken !== reservation.token || conversation.activeRequestId !== requestId) {

@@ -38,8 +38,17 @@ function conversationRoutes({ connection, limits, generation }) {
     next();
   });
   router.post("/", limiter(limits.create || 20, 60 * 1000), async (req, res) => {
-    if (!only(req.body, []) || Object.keys(req.body).length) throw invalid("Create a conversation with an empty object.");
-    const conversation = await Conversation.create({ ownerId: req.user._id });
+    if (!only(req.body, ['reportId','reviewVersion'])) throw invalid('Provide an empty object or an owned reportId and reviewVersion.');
+    const conversation = await service.transaction(async session => {
+      await require('../services/consent').accountFence(connection, req.user._id, session);
+      let context = {};
+      if (Object.keys(req.body).length) {
+        if (!idPattern.test(req.body.reportId || '') || !Number.isInteger(req.body.reviewVersion) || req.body.reviewVersion < 1) throw invalid('Invalid report context.');
+        const { report } = await require('../services/report-context').reportContext(connection, req.user._id, req.body.reportId, req.body.reviewVersion, session, true);
+        context = { reportId: report._id, reviewVersion: req.body.reviewVersion, title: `Report: ${report.displayName}`.slice(0,80) };
+      }
+      return (await Conversation.create([{ ownerId: req.user._id, ...context }], { session }))[0];
+    });
     res.status(201).json({ conversation: publicConversation(conversation) });
   });
   router.get("/", async (req, res) => {
@@ -55,12 +64,13 @@ function conversationRoutes({ connection, limits, generation }) {
     const data = await service.transaction(async (session) => {
       const c = await Conversation.findOne(req.conversationScope).session(session).lean();
       if (!c) throw notFound();
+      const context = c.reportId ? await require('../services/report-context').reportContext(connection, req.user._id, c.reportId, c.reviewVersion, session) : null;
       const filter = { ownerId: req.user._id, conversationId: c._id };
       if (cursor) filter.sequence = { $lt: cursor };
       const rows = await Message.find(filter).sort({ sequence: -1 }).limit(limit + 1).session(session).lean();
       const page = rows.slice(0, limit).reverse();
       const job = c.activeRequestId ? await ChatRequest.findOne({ ownerId: req.user._id, conversationId: c._id, requestId: c.activeRequestId }).session(session).lean() : null;
-      return { conversation: publicConversation(c), messages: page.map(publicMessage), nextCursor: rows.length > limit ? String(page[0].sequence) : null,
+      return { conversation: publicConversation(c), ...(context ? { reportContext: { reportId: String(c.reportId), reviewVersion: c.reviewVersion, outdated: context.outdated, name: context.report.displayName, realAvailable: false } } : {}), messages: page.map(publicMessage), nextCursor: rows.length > limit ? String(page[0].sequence) : null,
         activeRequest: job ? { requestId: job.requestId, content: job.content, status: job.status === "pending" && job.leaseUntil > new Date() ? "pending" : "failed", retryAfterMs: Math.max(0, (job.leaseUntil?.getTime() || 0) - Date.now()) } : null };
     });
     res.json(data);
@@ -82,7 +92,7 @@ function conversationRoutes({ connection, limits, generation }) {
     await service.remove(req.conversationScope);
     res.json({ deleted: true });
   });
-  router.use((error, req, res, next) => error instanceof ConversationError ? fail(res, error.status, error.code, error.message) : next(error));
+  router.use((error, req, res, next) => error instanceof ConversationError || error instanceof require('../services/report-errors').ReportError ? fail(res, error.status, error.code, error.message) : next(error));
   return router;
 }
 module.exports = { conversationRoutes };

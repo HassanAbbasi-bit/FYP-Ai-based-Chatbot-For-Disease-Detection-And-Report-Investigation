@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { conversationsApi, reconcileMessages } from "../api/conversations";
 
 const emptyThread = () => ({ messages: [], draft: "", pending: null, sending: false, loading: false, error: "", nextCursor: null, loaded: false });
-export default function useConversations(onExpired) {
+export default function useConversations(onExpired, initialContext) {
   const [list, setList] = useState([]);
   const [listCursor, setListCursor] = useState(null);
   const [listLoading, setListLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function useConversations(onExpired) {
         if (pending && !messages.some((m) => m.requestId === pending.requestId && m.role === "user")) {
           messages.push({ id: `pending-${pending.requestId}`, requestId: pending.requestId, content: pending.content, role: "user", mode: "demo", optimistic: true });
         }
-        return { ...old, messages, pending, nextCursor: data.nextCursor, loading: false, loaded: true,
+        return { ...old, messages, pending, reportContext: data.reportContext || null, nextCursor: data.nextCursor, loading: false, loaded: true,
           error: pending ? "This message needs confirmation. Retry to check or finish it safely." : "" };
       });
     } catch (error) {
@@ -88,15 +88,6 @@ export default function useConversations(onExpired) {
       if (alive.current && version === listVersion.current) setListLoading(false);
     }
   }
-  useEffect(() => {
-    alive.current = true;
-    let disposed = false;
-    queueMicrotask(() => { if (!disposed) refreshList(); });
-    const controllers = requests.current;
-    return () => { disposed = true; alive.current = false; for (const c of controllers) c.abort(); controllers.clear(); };
-    // Account changes remount this hook. Functions read the current state through refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   function select(id) {
     if (deleted.current.has(id)) return;
     const old = selectedRef.current;
@@ -118,6 +109,10 @@ export default function useConversations(onExpired) {
       if (!alive.current) return;
       upsert(data.conversation); select(data.conversation.id);
     });
+  }
+  async function createContext(context) {
+    await operation(async signal=>{const data=await conversationsApi.create(signal,context);if(alive.current){upsert(data.conversation);select(data.conversation.id);}});
+    if(alive.current)await refreshList();
   }
   async function rename(id, title) {
     let success = false;
@@ -168,6 +163,15 @@ export default function useConversations(onExpired) {
       if (!failure(error)) update(id, { pending: { ...submission, status: "failed" }, error: error.message });
     } finally { requests.current.delete(c); busy.current.delete(id); update(id, { sending: false }); }
   }
+  useEffect(() => {
+    alive.current = true;
+    let disposed = false;
+    queueMicrotask(() => { if (!disposed) { if(initialContext) createContext(initialContext); else refreshList(); } });
+    const controllers = requests.current;
+    return () => { disposed = true; alive.current = false; for (const c of controllers) c.abort(); controllers.clear(); };
+    // Account changes remount this hook. Functions read the current state through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return { list, listCursor, listLoading, listError, selected, thread: threads[selected] || emptyThread(), working,
     refreshList, select, create, rename, remove, send, reload: () => selected && loadThread(selected),
     loadOlder: () => selected && loadThread(selected, threadsRef.current[selected]?.nextCursor),
