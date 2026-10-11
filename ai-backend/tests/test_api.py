@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure ai-backend directory is in sys.path regardless of execution root
+_ai_dir = str(Path(__file__).resolve().parent.parent)
+if _ai_dir not in sys.path:
+    sys.path.insert(0, _ai_dir)
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
