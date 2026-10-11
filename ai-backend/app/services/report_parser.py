@@ -27,6 +27,7 @@ UNIT_FIXES = {
     "cumm": "/uL",
     "joumm/": "/uL",
     "mae eum": "10^6/uL",
+    "maeeum": "10^6/uL",
     "milvourm": "10^6/uL",
     "ff": "fL",
     "ff.": "fL",
@@ -215,6 +216,11 @@ OCR Text:
         # Handle common OCR decimal point missing in values (e.g. RBC 500 -> 5.0)
         if canonical_name == "RBC Count" and isinstance(num_val, (int, float)):
             if 100 <= num_val <= 700:
+                num_val = round(num_val / 100.0, 2)
+
+        # Handle common OCR decimal point missing in PCT (e.g. 35 -> 0.35)
+        if canonical_name == "PCT (Plateletcrit)" and isinstance(num_val, (int, float)):
+            if 10 <= num_val <= 90:
                 num_val = round(num_val / 100.0, 2)
 
         status, needs_review, clean_range = evaluate_lab_value(num_val, ref_range, canonical_name)
