@@ -1,107 +1,66 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api, clearCsrf } from "./api/client";
+import AuthScreen from "./screens/AuthScreen";
+import Chat from "./screens/Chat";
 import "./App.css";
 
-function App() {
-  const [messages, setMessages] = useState([]);
-  const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(null);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState("");
-  const [connection, setConnection] = useState("Not checked yet");
-  const [checking, setChecking] = useState(false);
-  const busy = useRef(false);
-  const checkingRef = useRef(false);
-  const inputRef = useRef(null);
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [restoring, setRestoring] = useState(true);
+  const [restoreError, setRestoreError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const logoutBusy = useRef(false);
 
-  async function checkConnection() {
-    if (checkingRef.current) return;
-    checkingRef.current = true;
-    setChecking(true);
-    setConnection("Checking...");
-    try {
-      const response = await fetch("/api/health", { signal: AbortSignal.timeout(5000) });
-      const data = await response.json();
-      if (!response.ok || data.status !== "ok" || data.service !== "express-api") throw new Error();
-      setConnection(`Connected — ${data.message}`);
-    } catch {
-      setConnection("Connection failed. Start Express in the server folder and try again.");
-    } finally {
-      checkingRef.current = false;
-      setChecking(false);
-    }
-  }
-
-  async function sendMessage(retry = false) {
-    if (busy.current) return;
-    const outgoing = retry ? pending : { id: crypto.randomUUID(), text: draft };
-    if (!outgoing || !outgoing.text.trim() || outgoing.text.length > 2000) return;
-    busy.current = true;
-    setSending(true);
-    setError("");
-    setPending(outgoing);
-    if (!retry) {
-      setMessages((current) => [...current, { ...outgoing, role: "user" }]);
-      setDraft("");
-    }
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: outgoing.text }),
-        signal: AbortSignal.timeout(15000),
-      });
-      let data;
-      try { data = await response.json(); } catch { throw new Error("The server returned an unreadable response. Check Express, then retry."); }
-      if (!response.ok) throw new Error(data.error?.message || `Server error (${response.status}). Please retry.`);
-      if (data.mode !== "demo" || typeof data.reply !== "string" || !data.reply.trim()) {
-        throw new Error("Unexpected demo response. Check the server, then retry.");
+  useEffect(() => {
+    const controller = new AbortController();
+    async function restore() {
+      try {
+        const data = await api("/auth/me", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        if (!controller.signal.aborted) setUser(data.user);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error.status === 401) setUser(null);
+        else setRestoreError(error.message);
+      } finally {
+        if (!controller.signal.aborted) setRestoring(false);
       }
-      setMessages((current) => [...current, { id: crypto.randomUUID(), text: data.reply, role: "assistant" }]);
-      setPending(null);
-    } catch (failure) {
-      setError(failure.name === "TimeoutError"
-        ? "The request timed out after 15 seconds. Your message is kept below; retry when the server is ready."
-        : failure instanceof TypeError
-          ? "Could not reach the server. Start Express and check your connection, then retry."
-          : failure.message);
+    }
+    restore();
+    return () => controller.abort();
+  }, [attempt]);
+
+  function expired() {
+    clearCsrf();
+    setUser(null);
+    setNotice("Your session expired. Sign in again to continue.");
+    setLogoutError("");
+  }
+  async function logout() {
+    if (logoutBusy.current) return;
+    logoutBusy.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      await api("/auth/logout", { method: "POST" });
+      clearCsrf();
+      setUser(null); // Unmounting Chat clears all in-memory messages and drafts.
+      setNotice("You are signed out. The previous conversation has been cleared.");
+    } catch (error) {
+      setLogoutError(`Could not confirm sign-out. ${error.message}`);
     } finally {
-      busy.current = false;
-      setSending(false);
-      inputRef.current?.focus();
+      logoutBusy.current = false;
+      setLoggingOut(false);
     }
   }
-
   return (
     <main className="page">
-      <section className="chat-panel" aria-labelledby="chat-title">
-        <header>
-          <p className="eyebrow">FYP · DEVELOPMENT</p>
-          <h1 id="chat-title">AI Health Assistant</h1>
-          <p className="demo-banner">Demo mode — AI is not connected.</p>
-          <p className="intro">This chat tests the React–Express connection. No medical analysis is performed. Messages stay in memory; refreshing clears them.</p>
-          <div className="connection">
-            <button type="button" className="secondary" onClick={checkConnection} disabled={checking}>{checking ? "Checking..." : "Check server connection"}</button>
-            <span role="status">{connection}</span>
-          </div>
-        </header>
-        <div className="conversation" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions">
-          {messages.length === 0 ? <p className="empty">No messages yet. Send a message to test the demo chat.</p> : messages.map((message) => (
-            <article key={message.id} className={`bubble ${message.role}`}>
-              <strong>{message.role === "user" ? "You" : "Assistant · Demo"}</strong>
-              <p>{message.text}</p>
-            </article>
-          ))}
-        </div>
-        <p className="sending" role="status">{sending ? "Sending message..." : ""}</p>
-        {error && <div className="error" role="alert"><p>{error}</p><button type="button" onClick={() => sendMessage(true)} disabled={sending}>Retry message</button></div>}
-        <form onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-          <label htmlFor="message">Your message</label>
-          <textarea ref={inputRef} id="message" rows="3" maxLength={2000} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={sending || Boolean(pending)} aria-describedby="message-help character-count" />
-          <div className="composer-footer"><span id="character-count">{draft.length} / 2,000 characters</span><button type="submit" disabled={sending || Boolean(pending) || !draft.trim()}>Send message</button></div>
-          <p id="message-help" className="hint">{pending ? "Your submitted message is kept in the conversation. Retry it before sending another message." : "Use test messages only. This checkpoint does not provide medical advice."}</p>
-        </form>
-      </section>
+      {restoring ? <section className="chat-panel" role="status">Restoring your session...</section>
+        : restoreError ? <section className="chat-panel"><h1>Connection unavailable</h1><p role="alert">{restoreError}</p><p>This does not mean your session expired.</p><button onClick={() => { setRestoreError(""); setRestoring(true); setAttempt((value) => value + 1); }}>Retry session check</button></section>
+          : user ? <Chat key={user.id} user={user} onExpired={expired} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+            : <AuthScreen notice={notice} onSignedIn={(signedIn) => { setUser(signedIn); setNotice(""); setLogoutError(""); }} />}
     </main>
   );
 }
-export default App;
