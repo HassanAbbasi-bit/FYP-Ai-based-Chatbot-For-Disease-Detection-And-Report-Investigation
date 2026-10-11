@@ -52,8 +52,9 @@ __pycache__/
 uploads/
 private-reports/
 
-# Logs
-*.log
+# Scratch / temp test scripts
+scratch/
+
 
 # Chroma Vector DB & Pytest Cache
 chroma_db/

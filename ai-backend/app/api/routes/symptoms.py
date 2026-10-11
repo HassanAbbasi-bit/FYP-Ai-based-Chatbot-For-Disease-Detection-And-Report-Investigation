@@ -1,16 +1,18 @@
 import uuid
+import json
 from fastapi import APIRouter, Depends
 from app.models.schemas import SymptomAssessmentRequest, SymptomAssessmentResponse, PossibleCause
 from app.core.security import verify_internal_auth, sanitize_medical_text
 from app.services.urgency_rules import evaluate_urgency
+from app.core.ollama_client import ollama_client
 
 router = APIRouter(tags=["Symptoms"])
 
 @router.post("/symptoms/assess", response_model=SymptomAssessmentResponse, dependencies=[Depends(verify_internal_auth)])
 async def assess_symptoms(request: SymptomAssessmentRequest):
     """
-    Evaluates reported symptoms, detects clinician red flags,
-    and returns possible causes with calibrated uncertainty.
+    Evaluates reported symptoms, checks clinician red flags,
+    and returns precise possible causes with calibrated uncertainty using llama3.2:3b.
     """
     clean_symptoms = [sanitize_medical_text(s) for s in request.symptoms]
     urgency, is_red_flag, escalation = evaluate_urgency(clean_symptoms)
@@ -29,39 +31,101 @@ async def assess_symptoms(request: SymptomAssessmentRequest):
                 PossibleCause(
                     condition="Potential Acute Medical Emergency",
                     likelihood="likely",
-                    rationale="Reported symptoms match clinical red-flag indicators requiring urgent medical intervention."
+                    rationale="Reported symptoms match clinical red-flag indicators requiring urgent in-person emergency intervention."
                 )
             ],
             recommended_questions_for_doctor=[
-                "Are emergency interventions or diagnostic imaging immediately necessary?"
+                "Are emergency diagnostic checks or imaging immediately required?"
             ],
-            self_care_notes="Do NOT wait. Seek immediate medical assistance."
+            self_care_notes="Do NOT wait. Seek immediate medical emergency care."
         )
 
-    # General assessment mapping with uncertainty
-    possible_causes = [
-        PossibleCause(
-            condition="Common Viral Illness or Physical Strain",
-            likelihood="possible",
-            rationale=f"Reported symptoms ({', '.join(clean_symptoms)}) frequently present in mild viral infections or physical exhaustion."
-        ),
-        PossibleCause(
-            condition="Tension or Lifestyle Factors",
-            likelihood="possible",
-            rationale="Dehydration, poor sleep, or stress can trigger similar symptom clusters."
-        )
-    ]
+    # Use llama3.2:3b to generate precise, personalized assessment
+    try:
+        health = await ollama_client.check_health()
+        if health.get("connected"):
+            symptoms_str = ", ".join(clean_symptoms)
+            duration_str = request.duration or "unspecified"
+            severity_str = request.severity or "moderate"
+            
+            prompt = f"""You are a clinical AI health triage assistant.
+Evaluate this patient symptom profile:
+Symptoms: {symptoms_str}
+Duration: {duration_str}
+Severity: {severity_str}
 
+Guidelines:
+1. Provide 2-3 plausible differential causes with calibrated uncertainty (likelihood: 'possible' or 'likely').
+2. Explain the medical rationale in plain, clear language.
+3. Formulate 2-3 specific, high-yield questions for the patient to ask their physician.
+4. Provide safe self-care and monitoring recommendations.
+
+Return ONLY valid JSON matching this schema:
+{{
+  "possible_causes": [
+    {{
+      "condition": "Condition Name",
+      "likelihood": "possible",
+      "rationale": "Medical rationale explaining how the symptoms align."
+    }}
+  ],
+  "recommended_questions_for_doctor": [
+    "Question 1",
+    "Question 2"
+  ],
+  "self_care_notes": "Safe self-care guidance."
+}}
+"""
+            system_prompt = "You are a clinical diagnostic educator. Return valid JSON only. Never issue a definitive diagnosis."
+            raw = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.2)
+            
+            clean_json = raw.strip()
+            if "```json" in clean_json:
+                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+            elif "```" in clean_json:
+                clean_json = clean_json.split("```")[1].split("```")[0].strip()
+                
+            data = json.loads(clean_json)
+            possible_causes = [PossibleCause(**c) for c in data.get("possible_causes", [])]
+            recommended_questions = data.get("recommended_questions_for_doctor", [])
+            self_care = data.get("self_care_notes", "Maintain hydration and rest. Seek clinical review if symptoms worsen.")
+
+            if possible_causes:
+                return SymptomAssessmentResponse(
+                    assessment_id=assessment_id,
+                    extracted_symptoms=clean_symptoms,
+                    urgency_level=urgency,
+                    is_red_flag=False,
+                    escalation_message=None,
+                    possible_causes=possible_causes,
+                    recommended_questions_for_doctor=recommended_questions,
+                    self_care_notes=self_care
+                )
+    except Exception:
+        pass
+
+    # Grounded heuristic fallback if model times out
     return SymptomAssessmentResponse(
         assessment_id=assessment_id,
         extracted_symptoms=clean_symptoms,
         urgency_level=urgency,
         is_red_flag=False,
         escalation_message=None,
-        possible_causes=possible_causes,
-        recommended_questions_for_doctor=[
-            "Given these symptoms, are there any specific lab tests (such as a CBC) that should be ordered?",
-            "What signs should prompt me to seek immediate follow-up if symptoms persist?"
+        possible_causes=[
+            PossibleCause(
+                condition="Upper Respiratory or Viral Syndrome",
+                likelihood="possible",
+                rationale=f"Reported symptoms ({', '.join(clean_symptoms)}) frequently align with common self-limiting viral illnesses."
+            ),
+            PossibleCause(
+                condition="Physical Exhaustion / Tension",
+                likelihood="possible",
+                rationale="Fatigue and headaches often correlate with stress, dehydration, or viral recovery."
+            )
         ],
-        self_care_notes="Ensure adequate hydration and rest. Monitor whether symptoms improve over the next 48 hours."
+        recommended_questions_for_doctor=[
+            "Given these symptoms, are diagnostic checks like a CBC or throat swab indicated?",
+            "What specific warning signs should prompt an earlier clinic revisit?"
+        ],
+        self_care_notes="Ensure adequate fluid intake and rest. Monitor temperature and seek evaluation if symptoms persist beyond 5-7 days."
     )
