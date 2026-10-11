@@ -53,6 +53,17 @@ input:focus-visible { outline: 3px solid #183247; outline-offset: 4px; }
 .danger:hover { background: #702323; }
 .mobile-history { display: none; }
 .bubble small { display: block; margin-top: 10px; color: #486579; }
+.workspace-nav { display: flex; gap: 10px; flex-wrap: wrap; max-width: 1160px; margin: 0 auto 16px; }
+.report-upload { padding: 16px; border: 1px solid #dce5ec; border-radius: 12px; }
+.report-upload button { margin-right: 8px; }
+.reports-layout { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 24px; margin-top: 24px; }
+.report-list { list-style: none; padding: 0; display: grid; gap: 10px; max-height: 520px; overflow-y: auto; }
+.report-detail { min-width: 0; overflow-wrap: anywhere; }
+.report-detail h2 { font-size: 22px; }
+.report-preview img { display: block; max-width: 100%; max-height: 480px; object-fit: contain; margin: 16px 0; }
+.button-link { display: inline-block; padding: 12px 18px; border-radius: 10px; font-weight: 700; text-decoration: none; margin: 12px 8px 12px 0; }
+.button-link:focus-visible { outline: 3px solid #183247; outline-offset: 4px; }
+@media (max-width: 760px) { .reports-layout { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) {
   .history-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mobile-history { display: inline-block; }

@@ -5,8 +5,9 @@ const { userSchema } = require("./models/User");
 const { fail, errorHandler } = require("./middleware/errors");
 const { checkOrigin, requireAuth } = require("./middleware/security");
 const { conversationRoutes } = require("./routes/conversations");
+const { reportRoutes } = require("./routes/reports");
 
-function createApp({ config, connection, store, limits = {}, generation }) {
+function createApp({ config, connection, store, limits = {}, generation, reports }) {
   if (!store) throw new Error("A MongoDB session store is required.");
   const app = express();
   const User = connection.models.User || connection.model("User", userSchema);
@@ -33,14 +34,15 @@ function createApp({ config, connection, store, limits = {}, generation }) {
     resave: false, saveUninitialized: false, rolling: false,
     cookie: { httpOnly: true, secure: config.production, sameSite: "lax", path: "/", maxAge: config.sessionTtlMs },
   });
-  app.use(["/api/auth", "/api/conversations"], checkOrigin(config.origin), sessions);
-  app.use(["/api/auth", "/api/conversations"], (req, res, next) => {
+  app.use(["/api/auth", "/api/conversations", "/api/reports"], checkOrigin(config.origin), sessions);
+  app.use(["/api/auth", "/api/conversations", "/api/reports"], (req, res, next) => {
     // Keep cookie and Mongo expiry tied to the original sign-in time.
     if (req.session.authExpiresAt) req.session.cookie.maxAge = Math.max(0, req.session.authExpiresAt - Date.now());
     next();
   });
   app.use("/api/auth", authRoutes({ User, config, limits }));
   app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation }));
+  app.use("/api/reports", requireAuth(User), reportRoutes({ reports, limits }));
   app.use((req, res) => fail(res, 404, "NOT_FOUND", "This endpoint does not exist."));
   app.use(errorHandler(connection));
   return app;

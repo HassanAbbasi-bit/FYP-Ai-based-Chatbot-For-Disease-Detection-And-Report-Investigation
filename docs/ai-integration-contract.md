@@ -35,3 +35,26 @@ The current service accepts demo output only. Real integration must explicitly p
 | Health scope | Agreed disclaimer, escalation and clinical limitations before real output |
 
 Persistent demo chat does not depend on these answers. Add details here only when supplied and verified. Secrets remain in ignored server-only environment configuration.
+
+## Report processing: awaiting the friend's contract
+
+Uploads now work independently of FastAPI. Confirmed current Express report routes and private storage are documented in [reports](reports.md); they are not a FastAPI contract. No extraction endpoint has been called or implemented.
+
+Before implementing processing, the friend must supply:
+
+- Actual FastAPI base URL, extraction/upload endpoint and HTTP method.
+- Authentication mechanism, exact header names and private credential exchange.
+- Multipart field names or alternative transport, supported formats and byte/page limits.
+- Synchronous response or asynchronous job contract, job ID and exact status values.
+- Polling/callback/streaming behavior, framing, timeout, cancellation and retry/idempotency rules.
+- Exact success and error JSON examples, maximum result sizes and privacy/retention/deletion behavior.
+- Extraction fields for test name, raw value, parsed value, units, reference range, report date and source page.
+- Indicators for unreadable text and uncertain values, how the user corrects values, and the correction/re-analysis contract.
+
+Proposed fields below are our discussion checklist only; none are confirmed mappings or clinical interpretations:
+
+```json
+{"tests":[{"testName":null,"rawValue":null,"parsedValue":null,"units":null,"referenceRange":null,"reportDate":null,"sourcePage":null,"unreadable":false,"uncertain":false}],"warnings":[]}
+```
+
+Proposed error envelope for discussion: `{"error":{"code":"UNCONFIRMED_CODE","message":"Safe message"}}`. The friend's actual examples must replace this proposal before an adapter is written. Nullability, numeric/range representation, date format, page numbering, confidence meaning and job status vocabulary all need agreement. We have not invented an address, endpoint, secret or confirmed mapping. React must continue using owner-authorized Express routes rather than contacting Ollama directly. The next checkpoint is to agree this contract and implement a bounded server-side adapter with synthetic extraction tests; medical analysis remains a separate checkpoint.

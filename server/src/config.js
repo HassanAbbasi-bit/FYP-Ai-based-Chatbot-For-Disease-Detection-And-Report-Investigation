@@ -1,4 +1,5 @@
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const path = require("node:path");
 function readConfig(env = process.env) {
   if (env.NODE_ENV && !["development", "test", "production"].includes(env.NODE_ENV)) throw new Error("NODE_ENV must be development, test, or production.");
   const production = env.NODE_ENV === "production";
@@ -13,6 +14,18 @@ function readConfig(env = process.env) {
   const port = Number(env.PORT || 5000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be between 1 and 65535.");
   if (env.TRUST_PROXY && env.TRUST_PROXY !== "loopback") throw new Error("TRUST_PROXY may only be loopback for a verified local reverse proxy, or unset.");
-  return { mongoUri: env.MONGODB_URI, sessionSecret: env.SESSION_SECRET, origin, production, trustProxy: env.TRUST_PROXY === "loopback" ? "loopback" : false, port, host: "127.0.0.1", sessionTtlMs: SESSION_TTL_MS, cookieName: production ? "__Host-fyp.sid" : "fyp.sid" };
+  function bounded(name, fallback, max) {
+    const value = env[name] === undefined ? fallback : Number(env[name]);
+    if (!Number.isSafeInteger(value) || value < 1 || value > max) throw new Error(`${name} must be a positive integer no greater than ${max}.`);
+    return value;
+  }
+  const reportStorageDir = path.resolve(env.REPORT_STORAGE_DIR || path.join(__dirname, "../private-reports"));
+  const clientRoot = path.resolve(__dirname, "../../client");
+  if (reportStorageDir === clientRoot || reportStorageDir.startsWith(clientRoot + path.sep)) throw new Error("REPORT_STORAGE_DIR must be outside client/ and publicly served directories.");
+  const reportMaxBytes = bounded("REPORT_MAX_BYTES", 10 * 1024 * 1024, 25 * 1024 * 1024);
+  const reportMaxTotalBytes = bounded("REPORT_MAX_TOTAL_BYTES", 100 * 1024 * 1024, 1024 * 1024 * 1024);
+  if (reportMaxTotalBytes < reportMaxBytes) throw new Error("REPORT_MAX_TOTAL_BYTES must be at least REPORT_MAX_BYTES.");
+  return { mongoUri: env.MONGODB_URI, sessionSecret: env.SESSION_SECRET, origin, production, trustProxy: env.TRUST_PROXY === "loopback" ? "loopback" : false, port, host: "127.0.0.1", sessionTtlMs: SESSION_TTL_MS, cookieName: production ? "__Host-fyp.sid" : "fyp.sid",
+    reportStorageDir, reportMaxBytes, reportMaxTotalBytes, reportMaxCount: bounded("REPORT_MAX_COUNT", 20, 1000), reportMaxPixels: bounded("REPORT_MAX_PIXELS", 20_000_000, 40_000_000) };
 }
 module.exports = { readConfig, SESSION_TTL_MS };
