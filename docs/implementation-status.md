@@ -12,7 +12,11 @@ Checkpoint 1: commit `80d1329`, pushed, [PR #9](https://github.com/HassanAbbasi-
 Checkpoint 2 implemented on `codex/report-results-context`, stacked on checkpoint 1: revision-bound durable synthetic result processing, cancellation/recovery, visibly outdated results, immutable owned report conversation bindings, and report deletion cascades. Real reviewed-data analysis/chat remain unavailable because the Python explanation endpoint accepts no corrected revision. Verification: 21 focused backend tests passed, lint/build passed. Browser verification follows in the final UI checkpoint.
 
 Remaining:
-3. Filtered history/selection, explicit compatible synthetic comparison, factual reviewed-data PDF export with layout verification.
+Checkpoint 2: commit `eb53bf8`, pushed, [PR #10](https://github.com/HassanAbbasi-bit/FYP-Ai-based-Chatbot-For-Disease-Detection-And-Report-Investigation/pull/10), base `codex/profile-consent-chat`.
+
+Checkpoint 3 implemented on `codex/history-export`, stacked on checkpoint 2: owner-scoped metadata/date/status history, three-report selection, a dedicated compatible/incompatible/missing synthetic comparison, and private in-memory factual PDF of the current reviewed revision, independent of AI. Verification: 25 focused backend tests passed, plus 4 export/filter/comparison checks rerun after the layout correction; frontend lint/build passed; dependency installation audit found zero vulnerabilities. Representative 80-row final 21-page synthetic PDF rendered and first/middle/final pages visually inspected after improving word wrapping. Supported Unicode units are preserved; unsupported glyphs fail explicitly and original HTML remains available.
+
+Remaining:
 4. Feedback/privacy/account deletion, dashboard/navigation, security review, CI, deployment preparation and handoff.
 
 External blockers: reachable/configured FastAPI and private key; verified live model/fallback provenance; corrected-data analysis endpoint/schema; comparison matching and conversion contract; structured doctor-summary endpoint; provider cancellation/retention/deletion guarantees. They do not block independent local functionality. No production or clinical certification is claimed. AI code is read-only for this task. PRs will be stacked when their predecessors remain unmerged; none will be merged automatically.

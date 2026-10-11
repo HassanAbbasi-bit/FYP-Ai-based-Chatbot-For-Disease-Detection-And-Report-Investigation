@@ -1,0 +1,11 @@
+# History, selection and factual PDF
+
+Report list filters are owner-scoped: literal `q` name search (120 characters), `status=uploaded|uploading|deleting`, UTC upload-date `from`/`to` (YYYY-MM-DD, inclusive dates). They retain createdAt/id keyset pagination. Upload dates are never specimen dates. Selection supports three reports, without inventing a real comparison endpoint or name-based matching.
+
+`GET /api/reports/comparison-demo` returns dedicated synthetic records only, when local demo is explicitly enabled; it accepts no report IDs/data. Stable sample measurement identity, units, specimen dates, ranges and numeric/comparator completeness determine compatibility; no conversion or interpretation of direction is supplied. Real matching/conversion contract remains required.
+
+`GET /api/reports/:id/export?version=N` produces a factual PDF only for the owned current saved user-reviewed revision. It does not require AI processing consent or send anything externally. It includes report identity, saved reviewed dates, unknowns, values, units, reported ranges, revision, provenance, generation date and limitations. It creates no doctor recommendations or AI summary. Optional profile is not automatically copied. No real summary API is confirmed.
+
+Exports are generated in memory, two at a time, with private/no-store authenticated delivery; there is no public export folder or permanent duplicate. Content is plain text, with no HTML or arbitrary URL fetching. Accessible current-review HTML table preserves the original text. PDFs are not tagged/fully accessible; use that HTML view. Current account/report/revision is rechecked before delivery. Existing 100-row/text bounds limit output size.
+
+Font: `EXPORT_FONT_PATH` is a server-controlled local font, never browser-supplied. Defaults are Windows Arial or Linux DejaVu Sans. Install the appropriate font on deployment and set its path privately. Unsupported glyphs produce an explicit error rather than silently changing saved units/text. Complex bidirectional script layout is not verified; HTML retains the source. Cantoo fontkit embeds a subset, no remote font fetch. Synthetic 80-row PDF ownership/layout tests exercise multiple pages and µg/L; rendered visual QA is recorded in implementation status.

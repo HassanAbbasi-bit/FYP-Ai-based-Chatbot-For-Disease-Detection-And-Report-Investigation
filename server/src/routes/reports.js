@@ -28,10 +28,14 @@ function reportRoutes({ reports, limits = {} }) {
     res.status(result.duplicate ? 200 : 201).json({ report: publicReport(result.report) });
   });
   router.get("/", async (req, res) => {
-    if (Object.keys(req.query).some((key) => !["cursor", "limit"].includes(key))) throw new ReportError(400, "INVALID_INPUT", "Only limit and cursor are accepted.");
+    if (Object.keys(req.query).some((key) => !['cursor','limit','q','from','to','status'].includes(key))) throw new ReportError(400, "INVALID_INPUT", "Invalid history filter.");
     const limit = req.query.limit === undefined ? 20 : typeof req.query.limit === "string" && /^\d+$/.test(req.query.limit) ? Number(req.query.limit) : NaN;
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new ReportError(400, "INVALID_INPUT", "Limit must be between 1 and 50.");
     const filter = { ownerId: req.user._id };
+    if(req.query.q!==undefined){if(typeof req.query.q!=='string'||req.query.q.length>120)throw new ReportError(400,'INVALID_INPUT','Search must be at most 120 characters.');filter.displayName={$regex:req.query.q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),$options:'i'};}
+    if(req.query.status!==undefined){if(!['uploaded','uploading','deleting'].includes(req.query.status))throw new ReportError(400,'INVALID_INPUT','Invalid report status.');filter.status=req.query.status;}
+    for(const k of ['from','to'])if(req.query[k]!==undefined){const s=req.query[k];if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s)||!Number.isFinite(Date.parse(s))||new Date(s).toISOString().slice(0,10)!==s)throw new ReportError(400,'INVALID_INPUT','Dates must be valid YYYY-MM-DD values.');filter.createdAt||={};filter.createdAt[k==='from'?'$gte':'$lt']=new Date(Date.parse(s)+(k==='to'?86400000:0));}
+    if(req.query.from&&req.query.to&&req.query.from>req.query.to)throw new ReportError(400,'INVALID_INPUT','Start date must not follow end date.');
     if (req.query.cursor !== undefined) {
       try {
         if (typeof req.query.cursor !== "string" || req.query.cursor.length > 200) throw new Error();
@@ -45,6 +49,7 @@ function reportRoutes({ reports, limits = {} }) {
     res.json({ reports: page.map(publicReport), nextCursor: rows.length > limit ? Buffer.from(JSON.stringify({ time: last.createdAt.toISOString(), id: last._id.toString() })).toString("base64url") : null,
       limits: { maxBytes: config.reportMaxBytes, maxCount: config.reportMaxCount, maxTotalBytes: config.reportMaxTotalBytes, maxPixels: config.reportMaxPixels } });
   });
+  router.get('/comparison-demo',async(req,res)=>{if(!config.extractionDemoEnabled||config.production)throw new ReportError(503,'DEMO_DISABLED','Synthetic comparison is disabled on this server.');if(Object.keys(req.query).length)throw new ReportError(400,'INVALID_INPUT','The dedicated demo accepts no report data.');res.json(require('../services/comparison-demo').comparisonDemo());});
   router.get("/:reportId", async (req, res) => {
     const report = await Report.findOne(req.reportScope);
     if (!report) throw reportNotFound();
@@ -62,6 +67,19 @@ function reportRoutes({ reports, limits = {} }) {
     try { await pipeline(handle.createReadStream(), res); }
     catch { if (!res.headersSent) throw storageUnavailable(); }
     finally { await handle.close().catch(() => {}); }
+  });
+  let exportsActive=0;
+  router.get('/:reportId/export',userLimit(10,60000),async(req,res)=>{
+    if(Object.keys(req.query).some(k=>k!=='version')||typeof req.query.version!=='string'||!/^\d{1,6}$/.test(req.query.version)||Number(req.query.version)<1)throw new ReportError(400,'INVALID_INPUT','Choose a saved review version.');
+    if(exportsActive>=2)throw new ReportError(503,'EXPORT_BUSY','Export is busy. Retry shortly.');exportsActive++;
+    try{
+      const {report,review,outdated}=await require('../services/report-context').reportContext(Report.db,req.user._id,req.params.reportId,Number(req.query.version));
+      if(outdated)throw new ReportError(409,'REVIEW_CHANGED','Reload and export the current reviewed revision.');
+      const bytes=await require('../services/factual-export').factualPdf({report,review,fontPath:config.exportFontPath});
+      await require('../services/consent').accountFence(Report.db,req.user._id);
+      const current=await Report.exists({...req.reportScope,status:'uploaded',reviewVersion:review.version,currentResultId:review.resultId});if(!current)throw new ReportError(409,'REVIEW_CHANGED','The report changed during export. Reload first.');
+      res.set({'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="reviewed-data.pdf"','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.send(bytes);
+    }finally{exportsActive--;}
   });
   router.delete("/:reportId", async (req, res) => {
     if (!req.body || Array.isArray(req.body) || Object.keys(req.body).length) throw new ReportError(400, "INVALID_INPUT", "Delete a report with an empty object.");
