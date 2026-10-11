@@ -77,10 +77,15 @@ def evaluate_lab_value(
             if high and high > 1000000 and low and low > 300000:
                 low, high = 150000.0, 410000.0
 
-        # Fix OCR missing decimal for RDW-CV (e.g. 116-140 -> 11.6 - 14.0)
+        # Fix OCR missing decimal for RDW-CV (e.g. 116-140 -> 11.6 - 14.0 or 15-145 -> 11.5 - 14.5)
         if canonical_test_name == "RDW-CV":
-            if low and low > 50 and high and high > 100:
-                low, high = round(low / 10.0, 1), round(high / 10.0, 1)
+            if high and high > 100:
+                low, high = 11.5, 14.5
+
+        # Fix OCR distorted range for Hematocrit (e.g. 40.0 - 0.0 -> 0 - 40 -> snap to 40 - 50)
+        if canonical_test_name == "Hematocrit (PCV)":
+            if (low is not None and low == 0) or (high is not None and high < 45):
+                low, high = 40.0, 50.0
 
         # Construct clean, standardized range string
         clean_range = reference_range or "Not specified"

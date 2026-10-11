@@ -37,6 +37,8 @@ UNIT_FIXES = {
     "pe": "pg",
     "m2": "%",
     "*": "%",
+    "%": "%",
+    "*%": "%",
     "e/dt": "g/dL",
     "cells/yal": "/uL",
     "cells/pat": "/uL",
@@ -158,9 +160,10 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
     table_items = []
     ignored_keywords = [
         "patient", "doctor", "dr.", "test name", "hospital", "clinic", "address", 
-        "phone", "date", "sample", "barcode", "bill", "invoice", "registered", 
+        "phone", "date", "sample", "seenple", "barcode", "bill", "invoice", "registered", 
         "pathologist", "complete blood", "report status", "collection type", "avenue", 
-        "district", "delhi", "road", "street", "pin", "zip", "tel"
+        "district", "delhi", "oethi", "road", "street", "pin", "zip", "tel", "city",
+        "specimen", "collected", "received", "reported", "ref by"
     ]
     for line in lines:
         line_clean = line.strip()
@@ -170,7 +173,7 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
             t_val = match.group(2)
             t_unit = match.group(3)
             t_range = match.group(4)
-            if len(t_name) > 2 and not any(kw in t_name.lower() for kw in ignored_keywords):
+            if len(t_name) > 2 and not any(kw in t_name.lower() for kw in ignored_keywords) and not t_name.endswith("-"):
                 table_items.append({
                     "name": t_name,
                     "value": t_val,
@@ -237,12 +240,33 @@ Lab Text:
         # Skip section headings, non-medical lines, or empty values
         if not raw_name or val is None or str(val).lower() in ["null", "none", ""]:
             continue
-        if any(w in raw_name.lower() for w in ["patient", "doctor", "dr.", "hospital", "clinic", "address", "phone", "date", "sample", "barcode", "bill", "invoice", "registered", "pathologist"]):
+        raw_name_clean = raw_name.strip().rstrip("-:;,")
+        if not raw_name_clean or len(raw_name_clean) < 2:
+            continue
+        admin_words = [
+            "patient", "doctor", "dr.", "hospital", "clinic", "address", "phone", 
+            "date", "sample", "seenple", "barcode", "bill", "invoice", "registered", 
+            "pathologist", "delhi", "oethi", "road", "street", "avenue", "city",
+            "specimen", "collected", "received", "reported", "ref by", "reference by"
+        ]
+        if any(w in raw_name.lower() for w in admin_words):
             continue
 
-        canonical_name, default_unit, default_range = canonicalize_test_name(raw_name)
+        canonical_name, default_unit, default_range = canonicalize_test_name(raw_name_clean)
         if canonical_name in seen_names:
             continue
+
+        # If not a recognized canonical medical test, ensure it's not a postal code or non-test artifact
+        if default_unit is None and default_range is None:
+            try:
+                num_check = float(str(val).replace(",", "").strip())
+                if num_check > 50000 and not item.get("reference_range"):
+                    continue
+            except (ValueError, TypeError):
+                pass
+            if not item.get("reference_range") and (not item.get("unit") or item.get("unit").lower() in ["seenple", "sample", "na", "null"]):
+                continue
+
         seen_names.add(canonical_name)
 
         unit = normalize_unit(item.get("unit"), default_unit)

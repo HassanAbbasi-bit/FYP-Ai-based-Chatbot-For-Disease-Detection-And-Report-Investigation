@@ -1,3 +1,4 @@
+import re
 import uuid
 import shutil
 import json
@@ -87,10 +88,13 @@ async def explain_medical_report(report_id: str):
 Analyze these laboratory test results:
 {findings_str}
 
-Guidelines:
-1. Provide a concise overall summary in 2 sentences.
-2. Select and explain ONLY the top 2 most clinically significant findings in plain language (1-2 sentences each).
-3. Formulate 2 high-yield, practical questions to ask the doctor.
+CRITICAL CLINICAL RULES:
+1. High hemoglobin or high hematocrit indicates erythrocytosis, hemoconcentration, or dehydration. NEVER claim elevated hemoglobin or hematocrit indicates anemia (anemia is ONLY caused by LOW hemoglobin).
+2. High lymphocytes indicates an immune, inflammatory, or viral response (lymphocytosis). Low lymphocytes indicates lymphopenia.
+3. High total leukocyte (WBC) count indicates leukocytosis. Low count indicates leukopenia.
+4. Provide a concise overall summary in 2 sentences.
+5. Select and explain ONLY the top 2 findings in plain language (1-2 sentences each).
+6. Formulate 2 high-yield, practical questions to ask the doctor.
 
 Return valid JSON matching this schema:
 {{
@@ -115,7 +119,13 @@ Return valid JSON matching this schema:
 }}
 """
         try:
-            raw = await ollama_client.generate_response(prompt=prompt, system_prompt="You are a clinical educator. Return clean JSON only.", temperature=0.2, max_tokens=380, json_mode=True)
+            raw = await ollama_client.generate_response(
+                prompt=prompt, 
+                system_prompt="You are a clinical educator. Never contradict hematological facts. Output valid JSON only.", 
+                temperature=0.1, 
+                max_tokens=360, 
+                json_mode=True
+            )
             clean_json = raw.strip()
             if "```json" in clean_json:
                 clean_json = clean_json.split("```json")[1].split("```")[0].strip()
@@ -123,10 +133,23 @@ Return valid JSON matching this schema:
                 clean_json = clean_json.split("```")[1].split("```")[0].strip()
             data = json.loads(clean_json)
 
+            summary = data.get("summary", "Your laboratory findings have been verified against reference ranges.")
+            # Safeguard against inversion hallucinations in text
+            if "anemia" in summary.lower() and any(t.get("name") in ["Hemoglobin", "Hematocrit (PCV)"] and t.get("status") == "high" for t in (abnormal_tests or [])):
+                summary = re.sub(r"(?i)\bindicat(ing|es)\s+anemia\b", "indicating potential hemoconcentration or erythrocytosis", summary)
+                summary = re.sub(r"(?i)\bsuggest(ing|s)\s+anemia\b", "suggesting potential hemoconcentration or erythrocytosis", summary)
+
+            findings_raw = data.get("findings", [])
+            for f in findings_raw:
+                expl = f.get("plain_language_explanation", "")
+                if "anemia" in expl.lower() and "high" in f.get("finding", "").lower():
+                    expl = re.sub(r"(?i)\b(indicat(ing|es)|suggest(ing|s)|cause(d)?\s+by)\s+anemia\b", "indicating potential hemoconcentration or erythrocytosis", expl)
+                    f["plain_language_explanation"] = expl
+
             return ReportExplanationResponse(
                 report_id=report_id,
-                summary=data.get("summary", "Your laboratory findings have been verified against reference ranges."),
-                findings=[FindingItem(**f) for f in data.get("findings", [])],
+                summary=summary,
+                findings=[FindingItem(**f) for f in findings_raw],
                 doctor_discussion_questions=data.get("doctor_discussion_questions", [
                     "Should we recheck these values in 3-6 months?",
                     "Are any dietary or lifestyle adjustments recommended based on these results?"
