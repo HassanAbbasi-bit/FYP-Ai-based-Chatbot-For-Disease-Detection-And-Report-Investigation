@@ -30,6 +30,32 @@ test("health and readiness work without creating anonymous sessions", async () =
   assert.equal((await browser.request("/api/auth/me")).status, 401);
   assert.equal(browser.cookie, "");
 });
+
+test("startup reports an occupied port and exits without a client-close crash", async () => {
+  const { spawn } = require("node:child_process");
+  const path = require("node:path");
+  const child = spawn(process.execPath, [path.join(__dirname, "../src/index.js")], {
+    env: { ...process.env, NODE_ENV: "test", MONGODB_URI: fixture.config.mongoUri,
+      SESSION_SECRET: fixture.config.sessionSecret, APP_ORIGIN: fixture.config.origin,
+      PORT: new URL(fixture.base).port, TRUST_PROXY: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (data) => { output += data; });
+  child.stderr.on("data", (data) => { output += data; });
+  const timeout = setTimeout(() => child.kill(), 15000);
+  try {
+    const code = await new Promise((resolve, reject) => {
+      child.once("exit", resolve);
+      child.once("error", reject);
+    });
+    assert.equal(code, 1);
+    assert.match(output, /already in use/);
+    assert.doesNotMatch(output, /Server running|MongoClientClosedError|triggerUncaughtException/);
+    assert.ok(!output.includes(fixture.config.mongoUri));
+    assert.ok(!output.includes(fixture.config.sessionSecret));
+  } finally { clearTimeout(timeout); }
+});
 test("registration normalizes email, hashes password, regenerates SID and exposes only public fields", async () => {
   const browser = client(fixture);
   await browser.bootstrap();

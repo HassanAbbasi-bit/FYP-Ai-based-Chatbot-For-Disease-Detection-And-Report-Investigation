@@ -17,6 +17,7 @@ async function start() {
   let store;
   let server;
   let stopping = false;
+  let stage = "database";
   async function shutdown(exitCode = 0) {
     if (stopping) return;
     stopping = true;
@@ -34,15 +35,31 @@ async function start() {
     await connection.openUri(config.mongoUri, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 10000, maxPoolSize: 10 });
     await connection.model("User", userSchema).init();
     await connection.db.collection("sessions").createIndex({ expires: 1 }, { expireAfterSeconds: 0 });
-    store = MongoStore.create({ client: connection.getClient(), ttl: config.sessionTtlMs / 1000, autoRemove: "native" });
+    // The TTL index was awaited above; avoid a second asynchronous index creation.
+    store = MongoStore.create({ client: connection.getClient(), dbName: connection.name, ttl: config.sessionTtlMs / 1000, autoRemove: "disabled" });
     store.on("error", () => console.error("Session storage is temporarily unavailable."));
     const app = createApp({ config, connection, store });
-    server = app.listen(config.port, config.host, () => console.log(`Server running at http://${config.host}:${config.port}`));
+    stage = "http";
+    server = app.listen(config.port, config.host);
+    await new Promise((resolve, reject) => {
+      server.once("listening", resolve);
+      server.once("error", reject);
+    });
+    console.log(`Server running at http://${config.host}:${config.port}`);
     server.on("error", () => { console.error("HTTP server could not start. Check the configured port."); shutdown(1); });
-  } catch {
-    console.error("Database initialization failed. Check server/.env and MongoDB availability; credentials are never printed.");
-    await connection.close().catch(() => {});
-    process.exitCode = 1;
+  } catch (error) {
+    if (stage === "http") {
+      console.error(error.code === "EADDRINUSE"
+        ? `Port ${config.port} is already in use. Stop the other backend before starting this one.`
+        : "HTTP server could not start. Check the configured port.");
+    } else if (["querySrv", "queryTxt", "getaddrinfo"].includes(error.syscall)) {
+      console.error("Database DNS lookup failed. Check your network DNS or use the full Atlas non-SRV connection string.");
+    } else if (error.code === 18) {
+      console.error("Database authentication failed. Check the database username, password, and authentication database privately in server/.env.");
+    } else {
+      console.error("Database initialization failed. Check server/.env, Atlas IP access, and database permissions; credentials are never printed.");
+    }
+    await shutdown(1);
     return;
   }
   process.on("SIGINT", () => shutdown());
