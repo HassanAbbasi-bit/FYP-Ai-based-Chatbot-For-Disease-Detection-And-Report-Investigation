@@ -1,122 +1,66 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useRef, useState } from "react";
+import { api, clearCsrf } from "./api/client";
+import AuthScreen from "./screens/AuthScreen";
+import Chat from "./screens/Chat";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [restoring, setRestoring] = useState(true);
+  const [restoreError, setRestoreError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const logoutBusy = useRef(false);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    async function restore() {
+      try {
+        const data = await api("/auth/me", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        if (!controller.signal.aborted) setUser(data.user);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error.status === 401) setUser(null);
+        else setRestoreError(error.message);
+      } finally {
+        if (!controller.signal.aborted) setRestoring(false);
+      }
+    }
+    restore();
+    return () => controller.abort();
+  }, [attempt]);
+
+  function expired() {
+    clearCsrf();
+    setUser(null);
+    setNotice("Your session expired. Sign in again to continue.");
+    setLogoutError("");
+  }
+  async function logout() {
+    if (logoutBusy.current) return;
+    logoutBusy.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      await api("/auth/logout", { method: "POST" });
+      clearCsrf();
+      setUser(null); // Unmounting Chat clears all in-memory messages and drafts.
+      setNotice("You are signed out. The previous conversation has been cleared.");
+    } catch (error) {
+      setLogoutError(`Could not confirm sign-out. ${error.message}`);
+    } finally {
+      logoutBusy.current = false;
+      setLoggingOut(false);
+    }
+  }
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <main className="page">
+      {restoring ? <section className="chat-panel" role="status">Restoring your session...</section>
+        : restoreError ? <section className="chat-panel"><h1>Connection unavailable</h1><p role="alert">{restoreError}</p><p>This does not mean your session expired.</p><button onClick={() => { setRestoreError(""); setRestoring(true); setAttempt((value) => value + 1); }}>Retry session check</button></section>
+          : user ? <Chat key={user.id} user={user} onExpired={expired} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+            : <AuthScreen notice={notice} onSignedIn={(signedIn) => { setUser(signedIn); setNotice(""); setLogoutError(""); }} />}
+    </main>
+  );
 }
-
-export default App
