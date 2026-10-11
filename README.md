@@ -1,65 +1,53 @@
-# AI Health Assistant
+# FYP Health Workspace
 
-Current checkpoint: MongoDB-backed accounts, conversations, private reports, persistent extraction jobs and versioned value corrections/review. Extraction is verified with an opt-in dedicated synthetic sample; a configured FastAPI adapter is available but live inference has not been verified. Report analysis is not connected. Chat remains clearly labelled DEMO. The friend's AI implementation is unchanged.
+React/Express app with MongoDB accounts/sessions, persistent conversations, private validated uploads, extraction jobs and versioned user review. Remaining application checkpoints add optional profile/consent, configured chat/symptom adapters, dedicated synthetic revision-bound results/report conversations, filtered history/comparison selection, factual PDF export, feedback, privacy/deletion and an actual-count dashboard. The friend's `ai-backend/` is unchanged.
 
-## Folders
+Real chat/symptoms/extraction require explicit private configuration and live verification. Corrected-report analysis/chat, real comparison and doctor-summary contracts remain missing. Demo findings never attach to ordinary uploads. Review means user-checked, not clinical validation. No clinical/production certification is claimed. See [actual status](docs/implementation-status.md), [AI agreement](docs/ai-integration-contract.md) and [exact backend handoff](docs/backend-handoff.md).
 
-- `client/`: React/Vite screens and relative `/api` requests (Hassan).
-- `server/`: Express, Mongoose users/conversations/messages/request records, MongoDB sessions (Hassan).
-- `ai-backend/`: friend's Python/FastAPI/Ollama service; maintained separately and not connected to Express yet.
-- `docs/`: shared setup and API agreements.
+## Setup and run
 
-## One-time setup
-
-Use Node.js 24 (tested runtime: 24.15.0). From the project root:
-
+Use Node 24 and install locked dependencies:
 ```powershell
-cd client
-npm.cmd ci
-cd ../server
+cd server
 npm.cmd ci
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
+cd ../client
+npm.cmd ci
 ```
+Edit `server/.env` privately: preserve your valid `MONGODB_URI` with an explicit application database on Atlas/replica set, a random hex `SESSION_SECRET` of at least 32 bytes, `APP_ORIGIN=http://localhost:5173`, `NODE_ENV=development`, `PORT=5000`. A standalone database lacks required transactions. Never paste/commit credentials.
 
-The first server dependency install/test may download an official MongoDB binary for isolated tests. This is not a permanent local database installation and does not configure your application database.
-
-Edit **server/.env privately**. Never send its contents in chat or commit it. Set `MONGODB_URI` to your own MongoDB connection string and an explicit application database such as `fyp_auth`. Preserve existing valid settings. MongoDB must be an Atlas cluster or replica set supporting transactions; a standalone local database is insufficient. No new credentials are required for this checkpoint. See [conversation setup and API](docs/conversations.md).
-
-Generate your own session secret locally:
-
+Two terminals from the project root:
 ```powershell
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Paste that output into `SESSION_SECRET` in `.env` when setting up from the example. An existing local `.env` prepared by the checkpoint already has a generated secret; preserve it. Keep `APP_ORIGIN=http://localhost:5173`, `NODE_ENV=development`, and `PORT=5000` for local development. Use exactly localhost:5173 in your browser so the Origin check matches. Leave `TRUST_PROXY` unset.
-
-See [database and authentication setup](docs/authentication.md) for local MongoDB and Atlas options. This code validates configuration at startup and exits with a safe message if database initialization fails. After startup, MongoDB outages produce HTTP 503; liveness stays separate from readiness.
-
-## Two development terminals
-
-Terminal 1, from the project root:
-
-```powershell
+# Terminal 1
 cd server
 npm.cmd run dev
 ```
-
-Terminal 2, from the project root:
-
 ```powershell
+# Terminal 2
 cd client
 npm.cmd run dev
 ```
+Open `http://localhost:5173`. Backend is loopback port 5000. `/api/health` is liveness; `/api/ready` checks MongoDB. `npm.cmd` avoids PowerShell execution-policy issues.
 
-Open http://localhost:5173. Express is bound to http://127.0.0.1:5000. Liveness: http://127.0.0.1:5000/api/health. Database readiness: http://127.0.0.1:5000/api/ready. `npm.cmd` avoids PowerShell's npm.ps1 policy issue; other shells can use `npm`.
+## Short synthetic walkthrough
 
-Register an account using a 15–128 character password, choose New chat, send a synthetic test message, and refresh to reopen saved history. Use the sidebar to switch, rename, or permanently delete conversations. Sign-out clears the browser's account state while saved conversations remain private to the owning account. Messages are stored in MongoDB, never localStorage/sessionStorage. Unsaved drafts remain only in memory. The interface explains persistence and requires confirmation for deletion.
+1. Register a test account; Dashboard shows actual saved counts.
+2. Settings: optional context may stay unknown. Choose/save chat/report processing permission. Profile context is not automatically transmitted.
+3. Chat: New chat, send a synthetic message, refresh/reopen, rename/delete or leave feedback. Local development defaults to clearly labelled demo.
+4. Set `EXTRACTION_DEMO_ENABLED=true` privately and restart Express for the dedicated sample. Reports: Create synthetic review sample, Run extraction, check/correct rows, Mark reviewed. Ordinary uploads cannot acquire sample values.
+5. Refresh saved revision/results, request a synthetic result. It copies reviewed entries without clinical interpretation/range flags. Save a newer revision to see the old result outdated. Open a separate conversation bound to a selected review revision.
+6. Download factual PDF of current reviewed data. Filter history by name/upload date/status, select reports, view a separate synthetic comparison with compatibility/missing-data limitations.
+7. Settings: clear context, withdraw permission, delete all conversations with confirmation, or test password-confirmed account deletion. Individual reports delete in their details. Interrupted deletion resumes; provider/downloaded copies/backups remain separate.
 
-Choose Reports after login, upload a synthetic PDF/JPEG/PNG, refresh, reopen, preview/download and confirm deletion. Default storage is created automatically; existing credentials need no changes. See [report setup and API](docs/reports.md) and [report validation](docs/report-checkpoint-validation.md).
+## Real service and deployment
+
+After confirming the friend's reachable origin/key, privately configure `AI_SERVICE_URL`, `AI_INTERNAL_KEY` and `CHAT_PROVIDER=fastapi` and/or `EXTRACTION_PROVIDER=fastapi`. React never accesses Ollama directly. Synthetic transport/schema tests do not validate live inference/clinical accuracy. Development-mode chat fallback is rejected; symptom fallback provenance is missing. No corrected-analysis endpoint is invented.
+
+See [profile/chat](docs/profile-and-chat.md), [extraction/review](docs/extraction-review.md), [results/context](docs/report-results.md), [history/PDF](docs/history-and-export.md) and [privacy/deployment preparation](docs/privacy-and-deployment.md). `EXPORT_FONT_PATH` is a readable local font (Windows Arial/Linux DejaVu defaults). Unsupported glyphs produce an explicit error; original HTML stays available. Complex bidi/PDF tagging is not verified. No public/permanent export copies.
+
+Production defaults `CHAT_PROVIDER=off`; demo chat/extraction are rejected. Deployment needs HTTPS, same-origin routing, protected MongoDB, durable private originals, fonts and reviewed proxy/backup/recovery procedures. Nothing is automatically deployed.
 
 ## Checks
-
-For the extraction/review demo, set `EXTRACTION_DEMO_ENABLED=true` privately in `server/.env` and restart Express. Reports → Create synthetic review sample → Run extraction → edit → Save draft → refresh/reopen → Mark reviewed. Ordinary uploads cannot receive demo fixture results. Demo is off by default and rejected in production. See [extraction setup, API and recovery](docs/extraction-review.md) and [actual verification](docs/extraction-checkpoint-validation.md). The optional real provider requires its private server-side key and an explicitly configured service URL; it is not automatically enabled.
 
 ```powershell
 cd server
@@ -69,32 +57,6 @@ npm.cmd test
 npm.cmd run lint
 npm.cmd run build
 ```
+Server tests own disposable MongoDB/private storage, never read `.env` or clear your database. Files run sequentially to bound disk/process use. The first install/test may download the official test MongoDB binary. CI uses synthetic tests without production credentials. Low temporary disk space can prevent startup; use a sufficiently sized temporary directory without deleting unrelated files.
 
-Tests always create their own disposable MongoDB replica set. They never read `.env` or use a supplied database URI. If MongoDB's official binary cannot be downloaded or started, integration tests fail rather than silently passing with mocked persistence. No user database is cleared.
-
-For browser verification without configuring your real database, run `node scripts/browser-test-server.js` from `server/` instead of the normal Express command. It binds port 5000 and uses a disposable MongoDB with an ephemeral session secret. Use test accounts only; stopping it removes its database. It is not the normal application setup.
-
-## Limits and next work
-
-This remains a development foundation, not a production-readiness or security certification. No email verification, password recovery, Express-side OCR, health profiles, live-verified AI integration, streaming or clinical analysis is implemented. Extraction orchestration and a configured adapter are implemented; the verified review workflow uses the dedicated synthetic demo. No password-reset or social-login buttons are shown. Retry recovery is user-driven; unsaved drafts do not survive refresh. Deletion removes live application records, not provider backups. See [persistence, retry, deletion and limitations](docs/conversations.md) and [actual validation](docs/conversation-checkpoint-validation.md).
-
-Production needs HTTPS, an exact HTTPS `APP_ORIGIN`, private secrets, protected MongoDB access, a same-origin `/api` reverse proxy, and deployment-specific review. Vite's development proxy is not a production reverse proxy. In-process rate limits reset on restart and must be replaced with a shared store before running multiple instances.
-
-Next checkpoint: verify the supplied [AI integration agreement](docs/ai-integration-contract.md) with your friend, then verify the implemented extraction adapter against synthetic files on the real service and agree the reviewed-data analysis contract. Do not expose AI credentials or connect React directly to Ollama.
-
-## Separate AI backend
-
-The friend-provided AI service is now included under `ai-backend/`. Its setup and dependencies are documented in [its README](ai-backend/README.md). Starting it alone does not connect Express. Real report extraction requires explicitly configured server-side adapter settings; chat remains demo. No live inference or clinical validation was performed in this checkpoint.
-
-### 2. Start the AI Backend (Terminal 1)
-```powershell
-# From the repository root (or double-click start_backend.bat):
-.\.venv\Scripts\Activate.ps1
-uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
-```
-* **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-* **Health Check**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-* **Agreed Contract**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
-* **Run Tests**: `pytest`
-
----
+For isolated browser tests, run `node scripts/browser-test-server.js` from server instead of your real backend; it owns temporary data. Optional `BROWSER_TEST_PORT`/`BROWSER_TEST_ORIGIN` allow separate ports with matching Vite `API_PROXY_TARGET`. Stop it after testing. Verification/merge order are in status. The friend maintains [AI setup](ai-backend/README.md); starting that alone does not enable adapters. Email verification, password reset, malware scanning and distributed scaling are not implemented.

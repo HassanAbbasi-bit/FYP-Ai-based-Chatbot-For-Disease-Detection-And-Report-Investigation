@@ -95,3 +95,6 @@ caption { text-align:left; font-weight:600; margin-bottom:.5rem; }
 select { max-width:100%; padding:.65rem; border:1px solid #b9ccd6; border-radius:.4rem; background:white; color:#123349; }
 .report-results { margin-top:1.5rem; border-top:1px solid #cedce4; padding-top:1rem; }
 .report-results button, .report-results .button-link { margin:.3rem; }
+label:has(> input[type="checkbox"]) { display:flex; align-items:flex-start; gap:.5rem; }
+input[type="checkbox"] { width:auto; flex:none; margin-top:.2rem; }
+.table-scroll:focus-visible { outline:3px solid #126b78; outline-offset:3px; }

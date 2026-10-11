@@ -59,7 +59,7 @@ export default function App() {
     <main className="page">
       {restoring ? <section className="chat-panel" role="status">Restoring your session...</section>
         : restoreError ? <section className="chat-panel"><h1>Connection unavailable</h1><p role="alert">{restoreError}</p><p>This does not mean your session expired.</p><button onClick={() => { setRestoreError(""); setRestoring(true); setAttempt((value) => value + 1); }}>Retry session check</button></section>
-          : user ? <Workspace key={user.id} user={user} onExpired={expired} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+          : user ? <Workspace key={user.id} user={user} onExpired={expired} onDeleted={message=>{clearCsrf();setUser(null);setNotice(message);setLogoutError('');}} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
             : <AuthScreen notice={notice} onSignedIn={(signedIn) => { setUser(signedIn); setNotice(""); setLogoutError(""); }} />}
     </main>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-export default function MessageHistory({ thread, selected, onOlder, onReload }) {
+import Feedback from './Feedback';
+export default function MessageHistory({ thread, selected, onOlder, onReload, onExpired }) {
   const panel = useRef(null);
   const nearBottom = useRef(true);
   const previous = useRef(null);
@@ -25,7 +26,8 @@ export default function MessageHistory({ thread, selected, onOlder, onReload }) 
     {!count && !thread.loading && thread.loaded && <p className="empty">No messages yet. Send a test message.</p>}
     {thread.messages.map((message) => <article key={message.id} className={`bubble ${message.role}`}>
       <strong>{message.role === "user" ? "You" : message.mode === "ai" ? "Assistant · Service response" : "Assistant · DEMO"}</strong><p>{message.content}</p>
-      {message.structured && <><p className="demo-banner">Service urgency: {message.structured.urgency}</p><ul>{message.structured.followUps?.map((q, i) => <li key={i}>{q}</li>)}</ul><p>{message.structured.disclaimer}</p></>}
+      {message.structured && <>{message.structured.urgency&&<p className="demo-banner">Service urgency: {message.structured.urgency}</p>}<ul>{message.structured.followUps?.map((q, i) => <li key={i}>{q}</li>)}</ul><p>{message.structured.disclaimer}</p></>}
+      {message.role==='assistant'&&!message.optimistic&&<Feedback kind="message" targetId={message.id} onExpired={onExpired}/>}
       {message.role === "user" && thread.pending?.requestId === message.requestId && <small>{thread.sending ? "Sending..." : thread.pending.status === "pending" ? "Awaiting confirmation" : "Needs retry"}</small>}
     </article>)}
   </div>;

@@ -13,4 +13,4 @@ const { ReportError } = require("../src/services/report-errors");
   async function close() { if (closing) return; closing = true; await fixture.close(); }
   process.on("SIGINT", close);
   process.on("SIGTERM", close);
-})().catch(() => { console.error("Isolated browser-test server could not start."); process.exitCode = 1; });
+})().catch((error) => { console.error(error.code === 'EADDRINUSE' ? 'Isolated browser-test port is occupied.' : error.code === 14031 ? 'Isolated test database needs more temporary disk space.' : 'Isolated browser-test server could not start.'); process.exitCode = 1; });

@@ -27,6 +27,7 @@ function aiGateway({ config, connection }) {
   }
   async function symptoms(ownerId, body) {
     const data = await post(ownerId, "/api/symptoms/assess", body);
+    await assertConsent(connection,ownerId,'chat');
     if (!Array.isArray(data.possible_causes) || data.possible_causes.length > 10 || typeof data.is_red_flag !== "boolean") throw new ReportError(502, "INVALID_AI_RESPONSE", "The service returned an invalid symptom response.");
     return { origin: "fastapi", assessmentId: text(data.assessment_id, 120), urgency: urgency(data.urgency_level), isRedFlag: data.is_red_flag,
       escalation: text(data.escalation_message, 1000, true), possibleCauses: data.possible_causes.map((c) => ({ condition: text(c.condition, 200), likelihood: ["possible", "likely", "unlikely"].includes(c.likelihood) ? c.likelihood : "unspecified", rationale: text(c.rationale, 1000) })),

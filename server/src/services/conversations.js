@@ -115,6 +115,7 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       if (!deleted.deletedCount) throw notFound();
       await Message.deleteMany({ ownerId: scope.ownerId, conversationId: scope._id }, { session });
       await ChatRequest.deleteMany({ ownerId: scope.ownerId, conversationId: scope._id }, { session });
+      if(connection.models.Feedback)await connection.models.Feedback.deleteMany({ownerId:scope.ownerId,conversationId:scope._id},{session});
     });
   }
   return { submit, remove, transaction };

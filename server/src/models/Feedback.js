@@ -1,0 +1,3 @@
+const mongoose=require('mongoose');
+function feedbackModel(connection){const schema=new mongoose.Schema({ownerId:{type:mongoose.Schema.Types.ObjectId,required:true},kind:{type:String,enum:['message','analysis'],required:true},targetId:{type:mongoose.Schema.Types.ObjectId,required:true},conversationId:mongoose.Schema.Types.ObjectId,reportId:mongoose.Schema.Types.ObjectId,reviewVersion:Number,helpful:{type:Boolean,required:true},unsupported:{type:Boolean,default:false},comment:{type:String,maxlength:500,default:null}},{timestamps:true,strict:'throw',bufferCommands:false});schema.index({ownerId:1,kind:1,targetId:1},{unique:true});return connection.models.Feedback||connection.model('Feedback',schema);}
+module.exports={feedbackModel};
