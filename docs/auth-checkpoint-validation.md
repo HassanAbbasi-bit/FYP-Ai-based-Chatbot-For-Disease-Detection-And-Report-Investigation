@@ -1,6 +1,6 @@
 # Authentication checkpoint validation
 
-Recorded 11 October 2026. Implementation is complete; validation against the owner's database and browser remains pending.
+Recorded 11 October 2026. Implementation and isolated API/browser validation are complete; validation against the owner's database remains pending.
 
 ## Passed
 
@@ -12,11 +12,12 @@ Recorded 11 October 2026. Implementation is complete; validation against the own
 - Client: five API-helper tests for CSRF bootstrap/rotation, rejected-operation retry, no automatic network replay, concurrent bootstrap, and distinguishing HTTP 401 from HTTP 503.
 - Client lint and production build.
 - Normal startup safely rejects a placeholder MongoDB URI without printing credentials.
+- Browser checks against a disposable database: registration, authenticated chat, refresh retaining sign-in while clearing messages, logout, generic wrong-password error, successful re-login with an empty conversation, and keyboard Tab/Enter sending. Session-check retry recovered after the server became available.
+- Mobile chat and login verified at a 390 × 844 viewport with no horizontal document overflow. The viewport override was reset after testing.
 
 ## Pending
 
 - The owner must privately fill `MONGODB_URI` in ignored `server/.env`. A random session secret was generated locally; no secret is tracked. Personal connection/authentication and network rules are not verified.
-- Browser tooling failed to initialize with a missing runtime-assets path, including after reset. No registration/chat/refresh/logout, wrong-login display, mobile layout, keyboard navigation, or visual success is claimed for this checkpoint. Repeat these checks once browser tooling is available or manually through the UI.
 - Not production-ready or security-certified. Email verification, recovery, real AI, uploads, health profiles, and conversation persistence remain out of scope.
 
-Keep the PR in draft until local database configuration and the browser checks are complete. Do not merge automatically.
+Keep the PR in draft until local database configuration is validated. Do not merge automatically.
