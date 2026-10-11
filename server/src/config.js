@@ -26,8 +26,9 @@ function readConfig(env = process.env) {
   const reportMaxTotalBytes = bounded("REPORT_MAX_TOTAL_BYTES", 100 * 1024 * 1024, 1024 * 1024 * 1024);
   if (reportMaxTotalBytes < reportMaxBytes) throw new Error("REPORT_MAX_TOTAL_BYTES must be at least REPORT_MAX_BYTES.");
   const extractionProvider = env.EXTRACTION_PROVIDER || "off";
-  const chatProvider = env.CHAT_PROVIDER || "demo";
-  if (!["demo", "fastapi"].includes(chatProvider)) throw new Error("CHAT_PROVIDER must be demo or fastapi.");
+  const chatProvider = env.CHAT_PROVIDER || (production ? 'off' : 'demo');
+  if (!['off','demo','fastapi'].includes(chatProvider)) throw new Error('CHAT_PROVIDER must be off, demo or fastapi.');
+  if(production&&chatProvider==='demo')throw new Error('Demo chat is disabled in production; configure fastapi or off.');
   if (!["off", "fastapi"].includes(extractionProvider)) throw new Error("EXTRACTION_PROVIDER must be off or fastapi.");
   const extractionDemoEnabled = env.EXTRACTION_DEMO_ENABLED === "true";
   if (env.EXTRACTION_DEMO_ENABLED && !["true", "false"].includes(env.EXTRACTION_DEMO_ENABLED)) throw new Error("EXTRACTION_DEMO_ENABLED must be true or false.");

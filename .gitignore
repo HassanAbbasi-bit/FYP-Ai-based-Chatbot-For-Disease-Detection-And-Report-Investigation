@@ -56,3 +56,4 @@ chroma_db/
 ai-backend/chroma_db/
 private-reports/
 scratch/
+.test-runtime/

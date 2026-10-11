@@ -43,7 +43,7 @@ async function createReportService({ connection, config, storage = new LocalRepo
         if (existing.status !== "uploaded") throw new ReportError(409, "UPLOAD_IN_PROGRESS", "This upload is incomplete or being deleted. Refresh the library and retry after cleanup.");
         return { report: existing, duplicate: true };
       }
-      const quota = await User.updateOne({ _id: ownerId, $expr: { $and: [
+      const quota = await User.updateOne({ _id: ownerId, deletionState: { $ne: 'pending' }, $expr: { $and: [
         { $lt: [{ $ifNull: ["$reportCount", 0] }, config.reportMaxCount] },
         { $lte: [{ $add: [{ $ifNull: ["$reportBytes", 0] }, config.reportMaxBytes] }, config.reportMaxTotalBytes] },
       ] } }, { $inc: { reportCount: 1, reportBytes: config.reportMaxBytes } }, { session });
@@ -86,6 +86,7 @@ async function createReportService({ connection, config, storage = new LocalRepo
       await storage.publish(key);
       await hooks.afterPublish?.(report);
       const completed = await transaction(async (session) => {
+        await require('./consent').accountFence(connection,ownerId,session);
         const updated = await Report.findOneAndUpdate({ _id: report._id, ownerId, status: "uploading" }, { $set: { displayName: filename, originalFilename: filename, fileType: detected.fileType,
           size: incoming.size, reservedBytes: incoming.size, sha256: incoming.sha256, status: "uploaded", leaseUntil: new Date(0) } }, { returnDocument: "after", runValidators: true, session });
         if (!updated) throw reportNotFound();
@@ -158,7 +159,8 @@ async function createReportService({ connection, config, storage = new LocalRepo
   catch (error) { clearInterval(cleanupTimer); await storage.close(); throw error; }
   const analyses = await require('./analysis').createAnalysisService({ connection, reports: { Report, config }, autoRun: extractionAutoRun });
   connection.fypReportDemo = config.extractionDemoEnabled && !config.production;
-  async function close() { clearInterval(cleanupTimer); await analyses.close(); await extractions.close(); await cleanupCompletion; await storage.close(); }
-  return { Report, storage, upload, remove, cleanup, close, config, extractions, analyses };
+  const deletion=require('./account-deletion').createAccountDeletion({connection,reports:{Report,remove,cleanup}});
+  async function close() { clearInterval(cleanupTimer); await deletion.close(); await analyses.close(); await extractions.close(); await cleanupCompletion; await storage.close(); }
+  return { Report, storage, upload, remove, cleanup, close, config, extractions, analyses, deletion };
 }
 module.exports = { createReportService };

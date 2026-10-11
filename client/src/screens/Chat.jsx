@@ -18,8 +18,8 @@ export default function Chat({ user, onExpired, onLogout, loggingOut, logoutErro
     <header>
       <div className="account-bar"><span>Signed in as <strong>{user.name}</strong> ({user.email})</span><button className="secondary" onClick={onLogout} disabled={loggingOut}>{loggingOut ? "Signing out..." : "Sign out"}</button></div>
       {logoutError && <p className="error" role="alert">{logoutError}</p>}
-      <p className="eyebrow">FYP · DEVELOPMENT</p><h1 id="chat-title">AI Health Assistant</h1>
-      <p className="demo-banner">{mode === "demo" ? "DEMO mode — AI is not connected. No medical analysis is performed." : "Configured AI service — consent required. Live model availability and clinical accuracy are not guaranteed."}</p>
+      <p className="eyebrow">FYP · HEALTH WORKSPACE</p><h1 id="chat-title">AI Health Assistant</h1>
+      <p className="demo-banner">{mode === "demo" ? "DEMO mode — AI is not connected. No medical analysis is performed." : mode==='unavailable'?'AI replies are unavailable until the real service is configured. Your saved conversations remain accessible.':"Configured AI service — consent required. Live model availability and clinical accuracy are not guaranteed."}</p>
       <p className="intro">Conversations are saved to your account and restored when you return. Use test messages only. You can permanently delete a conversation and its messages.</p>
       <button className="secondary mobile-history" aria-expanded={navigation} aria-controls="history-navigation" onClick={() => setNavigation((open) => !open)}>{navigation ? "Hide conversations" : "Show conversations"}</button>
     </header>
@@ -34,13 +34,13 @@ export default function Chat({ user, onExpired, onLogout, loggingOut, logoutErro
             <button className="secondary" onClick={() => setDialog({ action: "delete", conversation })} disabled={!conversation || chat.working || loggingOut}>Delete</button>
           </div></div>
           {conversation?.reportId&&<p className="demo-banner">Report context: {thread.reportContext?.name||conversation.reportId} · saved review revision {conversation.reviewVersion}. {thread.reportContext?.outdated?'Outdated: open a new conversation for the current revision.':'Only dedicated synthetic samples can answer in demo. Real reviewed-report AI context is unavailable.'}</p>}
-          <MessageHistory thread={thread} selected={chat.selected} onOlder={chat.loadOlder} onReload={chat.reload} />
+          <MessageHistory thread={thread} selected={chat.selected} onOlder={chat.loadOlder} onReload={chat.reload} onExpired={onExpired}/>
           <p className="sending" role="status">{thread.sending ? "Sending message..." : thread.pending ? "Your message is kept for a safe retry." : ""}</p>
           {thread.error && <div className="error" role="alert"><p>{thread.error}</p>{thread.pending ? <button onClick={() => chat.send(true)} disabled={thread.sending || loggingOut}>Retry message</button> : thread.loaded && <button className="secondary" onClick={chat.reload} disabled={thread.loading || loggingOut}>Refresh messages</button>}</div>}
           <form onSubmit={(event) => { event.preventDefault(); chat.send(); }}>
             <label htmlFor="message">Your message</label><textarea id="message" rows="3" maxLength={2000} value={thread.draft} onChange={(event) => chat.setDraft(event.target.value)} disabled={loggingOut || chat.working || !thread.loaded} aria-describedby="message-help character-count" />
-            <div className="composer-footer"><span id="character-count">{thread.draft.length} / 2,000 characters</span><button type="submit" disabled={loggingOut || chat.working || thread.sending || Boolean(thread.pending) || !thread.loaded || !thread.draft.trim()}>Send message</button></div>
-            <p id="message-help" className="hint">{thread.pending ? "Retry the submitted message before sending another. You can keep a draft here." : "Replies are demonstrations, not medical advice."}</p>
+            <div className="composer-footer"><span id="character-count">{thread.draft.length} / 2,000 characters</span><button type="submit" disabled={mode==='unavailable'||loggingOut || chat.working || thread.sending || Boolean(thread.pending) || !thread.loaded || !thread.draft.trim()}>Send message</button></div>
+            <p id="message-help" className="hint">{thread.pending ? "Retry the submitted message before sending another. You can keep a draft here." : mode==='demo'?"Replies are demonstrations, not medical advice.":'Service responses may be incomplete or uncertain; possibilities are not diagnoses.'}</p>
           </form>
         </>}
       </div>

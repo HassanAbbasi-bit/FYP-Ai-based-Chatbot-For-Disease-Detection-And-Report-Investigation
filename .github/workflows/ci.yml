@@ -1,0 +1,36 @@
+name: Application checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server
+        env:
+          MONGOMS_DOWNLOAD_IGNORE_MISSING_HEADER: 'true'
+      - run: npm ci
+        working-directory: client
+      - run: npm test
+        working-directory: client
+      - run: npm run lint
+        working-directory: client
+      - run: npm run build
+        working-directory: client
+      - run: git diff --check
