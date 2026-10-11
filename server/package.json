@@ -13,7 +13,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
     "argon2": "^0.45.1",
+    "busboy": "^1.6.0",
     "connect-mongo": "^6.0.0",
     "csrf-sync": "^4.2.1",
     "dotenv": "^18.0.7",
@@ -22,6 +24,7 @@
     "express-session": "^1.19.0",
     "mongodb": "^7.7.0",
     "mongoose": "^9.11.1",
+    "sharp": "^0.35.5",
     "validator": "^13.15.35"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, clearCsrf } from "./api/client";
 import AuthScreen from "./screens/AuthScreen";
-import Chat from "./screens/Chat";
+import Workspace from "./screens/Workspace";
 import "./App.css";
 
 export default function App() {
@@ -47,7 +47,7 @@ export default function App() {
       await api("/auth/logout", { method: "POST" });
       clearCsrf();
       setUser(null); // Unmounting Chat clears all in-memory messages and drafts.
-      setNotice("You are signed out. The previous conversation has been cleared.");
+      setNotice("You are signed out. Saved conversations remain private to your account.");
     } catch (error) {
       setLogoutError(`Could not confirm sign-out. ${error.message}`);
     } finally {
@@ -59,7 +59,7 @@ export default function App() {
     <main className="page">
       {restoring ? <section className="chat-panel" role="status">Restoring your session...</section>
         : restoreError ? <section className="chat-panel"><h1>Connection unavailable</h1><p role="alert">{restoreError}</p><p>This does not mean your session expired.</p><button onClick={() => { setRestoreError(""); setRestoring(true); setAttempt((value) => value + 1); }}>Retry session check</button></section>
-          : user ? <Chat key={user.id} user={user} onExpired={expired} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
+          : user ? <Workspace key={user.id} user={user} onExpired={expired} onLogout={logout} loggingOut={loggingOut} logoutError={logoutError} />
             : <AuthScreen notice={notice} onSignedIn={(signedIn) => { setUser(signedIn); setNotice(""); setLogoutError(""); }} />}
     </main>
   );

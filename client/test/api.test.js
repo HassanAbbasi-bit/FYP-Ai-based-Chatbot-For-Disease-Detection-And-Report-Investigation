@@ -14,7 +14,7 @@ test("mutations fetch a CSRF token, send cookie credentials and retain rotated t
     return json({ mode: "demo", reply: "test" });
   };
   await api("/auth/login", { method: "POST", body: { email: "demo@example.com", password: "a testing passphrase" } });
-  await api("/chat", { method: "POST", body: { message: "Hello" } });
+  await api("/conversations/012345678901234567890123/messages", { method: "POST", body: { message: "Hello" } });
   assert.equal(calls.length, 3);
   assert.equal(calls[1].options.headers["x-csrf-token"], "initial-token");
   assert.equal(calls[2].options.headers["x-csrf-token"], "rotated-token");
@@ -29,7 +29,7 @@ test("explicit CSRF rejection renews a token and retries the rejected operation 
     writes++;
     return writes === 1 ? json({ error: { code: "CSRF_INVALID", message: "Expired token" } }, 403) : json({ mode: "demo", reply: "test" });
   };
-  await api("/chat", { method: "POST", body: { message: "Hello" } });
+  await api("/conversations/012345678901234567890123/messages", { method: "POST", body: { message: "Hello" } });
   assert.equal(tokens, 2); assert.equal(writes, 2);
 });
 
@@ -56,6 +56,32 @@ test("concurrent mutations share one CSRF bootstrap", async () => {
     if (url === "/api/auth/csrf") { tokens++; return json({ csrfToken: "token" }); }
     return json({ mode: "demo", reply: "test" });
   };
-  await Promise.all([api("/chat", { method: "POST" }), api("/chat", { method: "POST" })]);
+  await Promise.all([api("/conversations/012345678901234567890123/messages", { method: "POST" }), api("/conversations/012345678901234567890123/messages", { method: "POST" })]);
   assert.equal(tokens, 1);
+});
+
+test("account changes cancel mutations still waiting for an old CSRF bootstrap", async () => {
+  let release;
+  let writes = 0;
+  globalThis.fetch = async (url) => {
+    if (url === "/api/auth/csrf") return new Promise((resolve) => { release = () => resolve(json({ csrfToken: "old-account-token" })); });
+    writes++; return json({});
+  };
+  const request = api("/conversations", { method: "POST" });
+  clearCsrf();
+  release();
+  await assert.rejects(request, (error) => error.name === "AbortError");
+  assert.equal(writes, 0);
+});
+
+test("CSRF retries preserve a conversation submission's intended request ID", async () => {
+  const bodies = [];
+  globalThis.fetch = async (url, options) => {
+    if (url === "/api/auth/csrf") return json({ csrfToken: "token" });
+    bodies.push(JSON.parse(options.body));
+    return bodies.length === 1 ? json({ error: { code: "CSRF_INVALID", message: "Expired" } }, 403) : json({ status: "completed" });
+  };
+  const submission = { message: "Synthetic", requestId: "045a0785-8649-44dd-a28e-18ed6186aba1" };
+  await api("/conversations/012345678901234567890123/messages", { method: "POST", body: submission });
+  assert.deepEqual(bodies, [submission, submission]);
 });

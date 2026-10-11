@@ -9,8 +9,8 @@ function checkOrigin(origin) {
     next();
   };
 }
-function limiter(limit, windowMs) {
-  return rateLimit({ windowMs, limit, standardHeaders: "draft-8", legacyHeaders: false, handler: (req, res) => fail(res, 429, "RATE_LIMITED", "Too many requests. Wait before trying again.") });
+function limiter(limit, windowMs, keyGenerator) {
+  return rateLimit({ windowMs, limit, ...(keyGenerator ? { keyGenerator } : {}), standardHeaders: "draft-8", legacyHeaders: false, handler: (req, res) => fail(res, 429, "RATE_LIMITED", "Too many requests. Wait before trying again.") });
 }
 function requireAuth(User) {
   return async (req, res, next) => {
