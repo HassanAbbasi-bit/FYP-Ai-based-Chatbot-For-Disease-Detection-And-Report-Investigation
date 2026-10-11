@@ -24,7 +24,13 @@ async function createReportService({ connection, config, storage = new LocalRepo
       const record = await Report.findOne({ _id: id, status: "deleting" }).session(session);
       if (!record) return;
       await Report.deleteOne({ _id: record._id, status: "deleting" }, { session });
-      for (const name of ["ExtractionJob", "ExtractionResult", "ReportReview"]) {
+      if (connection.models.Conversation) {
+        const conversations = await connection.models.Conversation.find({ ownerId: record.ownerId, reportId: record._id }).session(session).select('_id').lean();
+        const ids = conversations.map(c => c._id);
+        for (const name of ['Message','ChatRequest']) await connection.models[name].deleteMany({ ownerId: record.ownerId, conversationId: { $in: ids } }, { session });
+        await connection.models.Conversation.deleteMany({ ownerId: record.ownerId, reportId: record._id }, { session });
+      }
+      for (const name of ["ExtractionJob", "ExtractionResult", "ReportReview", "Analysis", "Feedback"]) {
         if (connection.models[name]) await connection.models[name].deleteMany({ reportId: record._id }, { session });
       }
       await User.updateOne({ _id: record.ownerId }, { $inc: { reportCount: -1, reportBytes: -record.reservedBytes } }, { session });
@@ -150,7 +156,9 @@ async function createReportService({ connection, config, storage = new LocalRepo
   let extractions;
   try { extractions = await createExtractionService({ connection, reports: { Report, storage, upload, config }, adapter: extractionAdapter, autoRun: extractionAutoRun }); }
   catch (error) { clearInterval(cleanupTimer); await storage.close(); throw error; }
-  async function close() { clearInterval(cleanupTimer); await extractions.close(); await cleanupCompletion; await storage.close(); }
-  return { Report, storage, upload, remove, cleanup, close, config, extractions };
+  const analyses = await require('./analysis').createAnalysisService({ connection, reports: { Report, config }, autoRun: extractionAutoRun });
+  connection.fypReportDemo = config.extractionDemoEnabled && !config.production;
+  async function close() { clearInterval(cleanupTimer); await analyses.close(); await extractions.close(); await cleanupCompletion; await storage.close(); }
+  return { Report, storage, upload, remove, cleanup, close, config, extractions, analyses };
 }
 module.exports = { createReportService };

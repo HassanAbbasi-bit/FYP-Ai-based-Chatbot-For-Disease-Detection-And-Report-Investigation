@@ -35,7 +35,7 @@ function authRoutes({ User, config, limits = {} }) {
     if (input.error) return fail(res, 400, "INVALID_INPUT", input.error);
     const user = await User.findOne({ email: input.value.email }).select("+passwordHash");
     const matches = await verifyPassword(user?.passwordHash, input.value.password);
-    if (!user || !matches) return fail(res, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
+    if (!user || !matches || user.deletionState === "pending") return fail(res, 401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
     await establishSession(req, res, user);
   });
   router.post("/logout", csrfSynchronisedProtection, async (req, res) => {

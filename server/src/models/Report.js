@@ -14,6 +14,7 @@ const reportSchema = new mongoose.Schema({
   activeExtractionId: mongoose.Schema.Types.ObjectId,
   currentResultId: mongoose.Schema.Types.ObjectId,
   reviewVersion: { type: Number, default: 0 },
+  analysisFence: { type: Number, default: 0 },
   status: { type: String, enum: ["uploading", "uploaded", "deleting"], required: true },
   leaseUntil: { type: Date, required: true },
 }, { timestamps: true, strict: "throw", bufferCommands: false });

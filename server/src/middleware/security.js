@@ -20,6 +20,7 @@ function requireAuth(User) {
     }
     const user = await User.findById(req.session.userId);
     if (!user) return fail(res, 401, "UNAUTHENTICATED", "Your session has expired. Please sign in again.");
+    if (user.deletionState === "pending") return fail(res, 401, "UNAUTHENTICATED", "Account deletion is in progress.");
     req.user = user;
     next();
   };

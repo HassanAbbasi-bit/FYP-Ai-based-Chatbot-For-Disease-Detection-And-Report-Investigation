@@ -26,18 +26,20 @@ function readConfig(env = process.env) {
   const reportMaxTotalBytes = bounded("REPORT_MAX_TOTAL_BYTES", 100 * 1024 * 1024, 1024 * 1024 * 1024);
   if (reportMaxTotalBytes < reportMaxBytes) throw new Error("REPORT_MAX_TOTAL_BYTES must be at least REPORT_MAX_BYTES.");
   const extractionProvider = env.EXTRACTION_PROVIDER || "off";
+  const chatProvider = env.CHAT_PROVIDER || "demo";
+  if (!["demo", "fastapi"].includes(chatProvider)) throw new Error("CHAT_PROVIDER must be demo or fastapi.");
   if (!["off", "fastapi"].includes(extractionProvider)) throw new Error("EXTRACTION_PROVIDER must be off or fastapi.");
   const extractionDemoEnabled = env.EXTRACTION_DEMO_ENABLED === "true";
   if (env.EXTRACTION_DEMO_ENABLED && !["true", "false"].includes(env.EXTRACTION_DEMO_ENABLED)) throw new Error("EXTRACTION_DEMO_ENABLED must be true or false.");
   if (production && extractionDemoEnabled) throw new Error("Synthetic demo extraction is disabled in production.");
   let aiServiceUrl;
-  if (extractionProvider === "fastapi") {
+  if (extractionProvider === "fastapi" || chatProvider === "fastapi") {
     try { const u = new URL(env.AI_SERVICE_URL); if (!["http:", "https:"].includes(u.protocol) || u.username || u.password || u.origin !== env.AI_SERVICE_URL) throw new Error(); aiServiceUrl = u.origin; }
     catch { throw new Error("Configure AI_SERVICE_URL as an exact HTTP(S) origin for the supplied service."); }
     if (!env.AI_INTERNAL_KEY || env.AI_INTERNAL_KEY.length > 256 || /[\r\n]/.test(env.AI_INTERNAL_KEY)) throw new Error("Configure AI_INTERNAL_KEY privately for extraction.");
   }
   return { mongoUri: env.MONGODB_URI, sessionSecret: env.SESSION_SECRET, origin, production, trustProxy: env.TRUST_PROXY === "loopback" ? "loopback" : false, port, host: "127.0.0.1", sessionTtlMs: SESSION_TTL_MS, cookieName: production ? "__Host-fyp.sid" : "fyp.sid",
     reportStorageDir, reportMaxBytes, reportMaxTotalBytes, reportMaxCount: bounded("REPORT_MAX_COUNT", 20, 1000), reportMaxPixels: bounded("REPORT_MAX_PIXELS", 20_000_000, 40_000_000),
-    extractionProvider, extractionDemoEnabled, aiServiceUrl, aiInternalKey: env.AI_INTERNAL_KEY, extractionTimeoutMs: bounded("EXTRACTION_TIMEOUT_MS", 45000, 60000) };
+    extractionProvider, chatProvider, extractionDemoEnabled, aiServiceUrl, aiInternalKey: env.AI_INTERNAL_KEY, extractionTimeoutMs: bounded("EXTRACTION_TIMEOUT_MS", 45000, 60000) };
 }
 module.exports = { readConfig, SESSION_TTL_MS };
