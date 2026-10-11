@@ -18,7 +18,7 @@ async function request(path, options = {}) {
     const response = await fetch(`/api${path}`, {
       ...options,
       credentials: "same-origin",
-      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(options.timeoutMs || 15000)]) : AbortSignal.timeout(options.timeoutMs || 15000),
     });
     let data;
     try { data = await response.json(); } catch {
@@ -44,7 +44,7 @@ async function getToken() {
   return tokenRequest;
 }
 
-export async function api(path, { method = "GET", body, signal } = {}) {
+export async function api(path, { method = "GET", body, signal, formData, headers = {} } = {}) {
   if (method === "GET") return request(path, { signal });
   const send = async () => {
     const version = sessionVersion;
@@ -52,9 +52,10 @@ export async function api(path, { method = "GET", body, signal } = {}) {
     if (version !== sessionVersion || signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
     return request(path, {
       method,
-      headers: { "Content-Type": "application/json", "x-csrf-token": token },
-      body: JSON.stringify(body || {}),
+      headers: { ...headers, ...(formData ? {} : { "Content-Type": "application/json" }), "x-csrf-token": token },
+      body: formData || JSON.stringify(body || {}),
       signal,
+      ...(formData ? { timeoutMs: 120000 } : {}),
     });
   };
   try { return await send(); } catch (error) {
@@ -62,5 +63,21 @@ export async function api(path, { method = "GET", body, signal } = {}) {
     if (error.code !== "CSRF_INVALID") throw error;
     clearCsrf();
     return send();
+  }
+}
+
+export async function reportFile(id, signal) {
+  try {
+    const response = await fetch(`/api/reports/${id}/file`, { credentials: "same-origin", signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(data.error?.message || "Could not open the private file. Please retry.", response.status, data.error?.code);
+    }
+    const type = response.headers.get("content-type");
+    if (!["image/png", "image/jpeg"].includes(type)) throw new ApiError("This file cannot be previewed as an image. Use the authenticated download.");
+    return response.blob();
+  } catch (error) {
+    if (error instanceof ApiError || error.name === "AbortError") throw error;
+    throw new ApiError("Could not load the private preview. Check your connection and retry.");
   }
 }

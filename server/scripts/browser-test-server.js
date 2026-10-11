@@ -1,8 +1,10 @@
 // Temporary browser-test server: never loads .env and never touches a configured user database.
 const { isolatedServer } = require("../test-support/database");
 (async () => {
-  const fixture = await isolatedServer({ port: 5000 });
-  console.log("Isolated browser-test server ready at http://127.0.0.1:5000 (temporary MongoDB, no user credentials).");
+  const port = Number(process.env.BROWSER_TEST_PORT || 5000);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid test port");
+  const fixture = await isolatedServer({ port, origin: process.env.BROWSER_TEST_ORIGIN || "http://localhost:5173" });
+  console.log(`Isolated browser-test server ready at http://127.0.0.1:${port} (temporary MongoDB and private storage, no user credentials).`);
   let closing = false;
   async function close() { if (closing) return; closing = true; await fixture.close(); }
   process.on("SIGINT", close);

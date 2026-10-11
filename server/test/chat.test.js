@@ -40,7 +40,7 @@ test("startup reports an occupied port and exits without a client-close crash", 
   const child = spawn(process.execPath, [path.join(__dirname, "../src/index.js")], {
     env: { ...process.env, NODE_ENV: "test", MONGODB_URI: fixture.config.mongoUri,
       SESSION_SECRET: fixture.config.sessionSecret, APP_ORIGIN: fixture.config.origin,
-      PORT: new URL(fixture.base).port, TRUST_PROXY: "" },
+      PORT: new URL(fixture.base).port, TRUST_PROXY: "", REPORT_STORAGE_DIR: path.join(fixture.config.reportStorageDir, "startup-probe") },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";

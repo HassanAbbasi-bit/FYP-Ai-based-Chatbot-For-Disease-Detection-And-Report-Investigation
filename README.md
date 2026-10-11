@@ -1,6 +1,6 @@
 # AI Health Assistant
 
-Current checkpoint: MongoDB-backed accounts, sessions, persistent conversations, saved chat history, and secure conversation deletion. Replies remain clearly labelled DEMO. The friend's AI service is untouched.
+Current checkpoint: MongoDB-backed accounts, conversations, and private PDF/JPEG/PNG uploads with history, image previews, authenticated downloads and recoverable deletion. Report analysis is not connected. Replies remain clearly labelled DEMO. The friend's AI service is untouched.
 
 ## Folders
 
@@ -55,6 +55,8 @@ Open http://localhost:5173. Express is bound to http://127.0.0.1:5000. Liveness:
 
 Register an account using a 15–128 character password, choose New chat, send a synthetic test message, and refresh to reopen saved history. Use the sidebar to switch, rename, or permanently delete conversations. Sign-out clears the browser's account state while saved conversations remain private to the owning account. Messages are stored in MongoDB, never localStorage/sessionStorage. Unsaved drafts remain only in memory. The interface explains persistence and requires confirmation for deletion.
 
+Choose Reports after login, upload a synthetic PDF/JPEG/PNG, refresh, reopen, preview/download and confirm deletion. Default storage is created automatically; existing credentials need no changes. See [report setup and API](docs/reports.md) and [report validation](docs/report-checkpoint-validation.md).
+
 ## Checks
 
 ```powershell
@@ -72,7 +74,7 @@ For browser verification without configuring your real database, run `node scrip
 
 ## Limits and next work
 
-This remains a development foundation, not a production-readiness or security certification. No email verification, password recovery, report uploads, health profiles, real AI/Ollama integration, streaming, or clinical features are implemented. No password-reset or social-login buttons are shown. Retry recovery is user-driven; unsaved drafts do not survive refresh. Deletion removes live application records, not provider backups. See [persistence, retry, deletion and limitations](docs/conversations.md) and [actual validation](docs/conversation-checkpoint-validation.md).
+This remains a development foundation, not a production-readiness or security certification. No email verification, password recovery, report extraction/OCR, health profiles, real AI/Ollama integration, streaming, or clinical features are implemented. No password-reset or social-login buttons are shown. Retry recovery is user-driven; unsaved drafts do not survive refresh. Deletion removes live application records, not provider backups. See [persistence, retry, deletion and limitations](docs/conversations.md) and [actual validation](docs/conversation-checkpoint-validation.md).
 
 Production needs HTTPS, an exact HTTPS `APP_ORIGIN`, private secrets, protected MongoDB access, a same-origin `/api` reverse proxy, and deployment-specific review. Vite's development proxy is not a production reverse proxy. In-process rate limits reset on restart and must be replaced with a shared store before running multiple instances.
 
