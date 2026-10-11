@@ -71,3 +71,20 @@ input:focus-visible { outline: 3px solid #183247; outline-offset: 4px; }
   .navigation.open { display: block; }
   .history-list { max-height: 240px; }
 }
+.extraction-review { margin-top: 1.5rem; border-top: 1px solid #d5e3e8; padding-top: 1rem; }
+.review-row { margin: 1rem 0; padding: .8rem; border: 1px solid #c7dce3; border-radius: 8px; min-width: 0; }
+.review-row legend { font-weight: 700; }
+.review-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.review-fields label { display: grid; gap: .3rem; min-width: 0; }
+.review-fields input { width: 100%; min-width: 0; box-sizing: border-box; }
+.checkbox-label { display: flex; align-items: center; gap: .5rem; margin: .7rem 0; }
+.checkbox-label input { width: auto; }
+.original-value { font-size: .9rem; overflow-wrap: anywhere; background: #eef5f8; padding: .5rem; }
+.removed-row { background: #f5f5f5; }
+.extraction-review button { margin: .3rem .3rem .3rem 0; }
+.report-detail-body { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr); gap: 20px; align-items: start; }
+.report-original { position: sticky; top: 16px; min-width: 0; }
+.report-detail-body .extraction-review { margin-top: 0; padding-top: 0; border-top: none; min-width: 0; }
+@media (min-width: 1100px) { .reports-layout { grid-template-columns: minmax(180px, .6fr) minmax(0, 3fr); } }
+@media (max-width: 1099px) { .report-detail-body { grid-template-columns: minmax(0, 1fr); } .report-original { position: static; } }
+@media (max-width: 700px) { .review-fields { grid-template-columns: 1fr; } }

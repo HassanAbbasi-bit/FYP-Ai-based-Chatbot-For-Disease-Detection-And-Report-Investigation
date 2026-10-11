@@ -1,6 +1,6 @@
 # AI Health Assistant
 
-Current checkpoint: MongoDB-backed accounts, conversations, and private PDF/JPEG/PNG uploads with history, image previews, authenticated downloads and recoverable deletion. Report analysis is not connected. Replies remain clearly labelled DEMO. The friend's AI service is untouched.
+Current checkpoint: MongoDB-backed accounts, conversations, private reports, persistent extraction jobs and versioned value corrections/review. Extraction is verified with an opt-in dedicated synthetic sample; a configured FastAPI adapter is available but live inference has not been verified. Report analysis is not connected. Chat remains clearly labelled DEMO. The friend's AI implementation is unchanged.
 
 ## Folders
 
@@ -59,6 +59,8 @@ Choose Reports after login, upload a synthetic PDF/JPEG/PNG, refresh, reopen, pr
 
 ## Checks
 
+For the extraction/review demo, set `EXTRACTION_DEMO_ENABLED=true` privately in `server/.env` and restart Express. Reports → Create synthetic review sample → Run extraction → edit → Save draft → refresh/reopen → Mark reviewed. Ordinary uploads cannot receive demo fixture results. Demo is off by default and rejected in production. See [extraction setup, API and recovery](docs/extraction-review.md) and [actual verification](docs/extraction-checkpoint-validation.md). The optional real provider requires its private server-side key and an explicitly configured service URL; it is not automatically enabled.
+
 ```powershell
 cd server
 npm.cmd test
@@ -74,15 +76,15 @@ For browser verification without configuring your real database, run `node scrip
 
 ## Limits and next work
 
-This remains a development foundation, not a production-readiness or security certification. No email verification, password recovery, report extraction/OCR, health profiles, real AI/Ollama integration, streaming, or clinical features are implemented. No password-reset or social-login buttons are shown. Retry recovery is user-driven; unsaved drafts do not survive refresh. Deletion removes live application records, not provider backups. See [persistence, retry, deletion and limitations](docs/conversations.md) and [actual validation](docs/conversation-checkpoint-validation.md).
+This remains a development foundation, not a production-readiness or security certification. No email verification, password recovery, Express-side OCR, health profiles, live-verified AI integration, streaming or clinical analysis is implemented. Extraction orchestration and a configured adapter are implemented; the verified review workflow uses the dedicated synthetic demo. No password-reset or social-login buttons are shown. Retry recovery is user-driven; unsaved drafts do not survive refresh. Deletion removes live application records, not provider backups. See [persistence, retry, deletion and limitations](docs/conversations.md) and [actual validation](docs/conversation-checkpoint-validation.md).
 
 Production needs HTTPS, an exact HTTPS `APP_ORIGIN`, private secrets, protected MongoDB access, a same-origin `/api` reverse proxy, and deployment-specific review. Vite's development proxy is not a production reverse proxy. In-process rate limits reset on restart and must be replaced with a shared store before running multiple instances.
 
-Next checkpoint: verify the supplied [AI integration agreement](docs/ai-integration-contract.md) with your friend, then implement and verify a bounded Express-to-FastAPI adapter. Do not expose AI credentials or connect React directly to Ollama.
+Next checkpoint: verify the supplied [AI integration agreement](docs/ai-integration-contract.md) with your friend, then verify the implemented extraction adapter against synthetic files on the real service and agree the reviewed-data analysis contract. Do not expose AI credentials or connect React directly to Ollama.
 
 ## Separate AI backend
 
-The friend-provided AI service is now included under `ai-backend/`. Its setup and dependencies are documented in [its README](ai-backend/README.md). Starting it does not connect the React/Express demo chat or uploaded reports to AI. No live inference or clinical validation was performed during this conflict resolution.
+The friend-provided AI service is now included under `ai-backend/`. Its setup and dependencies are documented in [its README](ai-backend/README.md). Starting it alone does not connect Express. Real report extraction requires explicitly configured server-side adapter settings; chat remains demo. No live inference or clinical validation was performed in this checkpoint.
 
 ### 2. Start the AI Backend (Terminal 1)
 ```powershell

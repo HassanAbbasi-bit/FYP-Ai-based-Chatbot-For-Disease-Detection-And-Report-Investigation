@@ -1,6 +1,6 @@
 # Private report uploads
 
-Supported flow: Login → Reports → Upload → List → Open/Preview/Download → Delete. Status is **Uploaded — analysis is not connected yet.** No extraction, OCR, correction, diagnosis or AI calls are implemented.
+Upload flow: Login → Reports → Upload → List → Open/Preview/Download → Delete. Upload status is **Uploaded — analysis is not connected yet.** The upload API performs no analysis. The next checkpoint adds opt-in extraction jobs and corrections; see [extraction/review](extraction-review.md). No medical interpretation is implemented.
 
 ## Setup
 

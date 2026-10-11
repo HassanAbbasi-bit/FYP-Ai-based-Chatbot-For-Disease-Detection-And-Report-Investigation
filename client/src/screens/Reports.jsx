@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { reportsApi, formatSize } from "../api/reports";
 import ReportDetail from "../components/ReportDetail";
 import ReportDeleteDialog from "../components/ReportDeleteDialog";
+import { extractionApi } from "../api/extractions";
 
-export default function Reports({ onExpired, loggingOut }) {
+export default function Reports({ onExpired, loggingOut, onDirtyChange }) {
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [limits, setLimits] = useState(null);
@@ -28,6 +29,9 @@ export default function Reports({ onExpired, loggingOut }) {
   const busy = useRef(false);
   const deleteBusy = useRef(false);
   const expired = useRef(onExpired);
+  const reviewDirty = useRef(false), sampleId = useRef(null);
+  function guard() { return !reviewDirty.current || window.confirm("Discard unsaved report review edits?"); }
+  function dirtyChanged(value) { reviewDirty.current = value; onDirtyChange?.(value); }
   useEffect(() => { expired.current = onExpired; }, [onExpired]);
   function controller() { const c = new AbortController(); requests.current.add(c); return c; }
   function failure(err) {
@@ -59,6 +63,7 @@ export default function Reports({ onExpired, loggingOut }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   async function open(id) {
+    if (!guard()) return;
     detailController.current?.abort();
     const c = controller(); detailController.current = c;
     setSelected(null); setOpening(true); setError("");
@@ -75,7 +80,7 @@ export default function Reports({ onExpired, loggingOut }) {
   }
   async function upload(event) {
     event.preventDefault();
-    if (!file || busy.current || loggingOut || !limits) return;
+    if (!file || busy.current || loggingOut || !limits || !guard()) return;
     if (file.size < 1 || file.size > limits.maxBytes) { setUploadError(`Choose a non-empty file no larger than ${formatSize(limits.maxBytes)}.`); return; }
     busy.current = true; setUploading(true); setUploadError(""); setNotice("");
     const c = controller(); uploadController.current = c;
@@ -103,9 +108,19 @@ export default function Reports({ onExpired, loggingOut }) {
     } catch (err) { if (!failure(err)) setDeleteError(err.message); }
     finally { requests.current.delete(c); deleteBusy.current = false; if (alive.current) setDeleting(false); }
   }
+  async function createSample() {
+    if (busy.current || !guard()) return;
+    busy.current = true; setUploading(true); setUploadError("");
+    sampleId.current ||= crypto.randomUUID(); const c = controller();
+    try { const data = await extractionApi.sample(sampleId.current, c.signal); if (alive.current && !c.signal.aborted) { sampleId.current = null; await load(); await open(data.report.id); } }
+    catch (err) { if (!failure(err)) setUploadError(err.message); }
+    finally { requests.current.delete(c); busy.current = false; if (alive.current) setUploading(false); }
+  }
   return <section className="chat-panel history-panel" aria-labelledby="reports-title">
     <h1 id="reports-title">Private report library</h1>
     <p className="intro">Files are saved privately to your account. Uploading does not extract values or provide medical analysis. File checks are not malware scanning.</p>
+    <button className="secondary" disabled={uploading || loggingOut} onClick={createSample}>Create synthetic review sample</button>
+    <p className="hint">The synthetic sample requires demo mode to be enabled on this server. Its values are available only for this dedicated sample.</p>
     <form onSubmit={upload} className="report-upload">
       <label htmlFor="report-file">Choose a report</label>
       <input ref={input} id="report-file" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={choose} disabled={uploading || loggingOut} aria-describedby="report-upload-help" />
@@ -126,7 +141,7 @@ export default function Reports({ onExpired, loggingOut }) {
         </button></li>)}</ul>
         {cursor && <button className="secondary" onClick={() => load(cursor)} disabled={loading || deleting || loggingOut}>Load more reports</button>}
       </section>
-      <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDelete={() => { setDeleteError(""); setConfirming(true); }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
+      <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDirtyChange={dirtyChanged} onDelete={() => { if (guard()) { setDeleteError(""); setConfirming(true); } }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
     </div>
     {confirming && <ReportDeleteDialog busy={deleting} error={deleteError} onClose={() => setConfirming(false)} onConfirm={remove} />}
   </section>;

@@ -36,19 +36,20 @@ The current service accepts demo output only. Real integration must explicitly p
 
 Persistent demo chat does not depend on these answers. Add details here only when supplied and verified. Secrets remain in ignored server-only environment configuration.
 
-## Report processing: awaiting the friend's contract
+## Report processing: implemented boundary and remaining questions
 
-Uploads now work independently of FastAPI. Confirmed current Express report routes and private storage are documented in [reports](reports.md); they are not a FastAPI contract. No extraction endpoint has been called or implemented.
+Uploads work independently of FastAPI. Express now provides persistent jobs, versioned review/corrections, an opt-in dedicated synthetic sample, and a configurable FastAPI adapter. See [extraction/review API](extraction-review.md). The supplied local service was not reachable during verification; adapter transport/schema tests use a synthetic local HTTP stub. Real inference is not claimed.
 
-Before implementing processing, the friend must supply:
+The supplied route is POST /api/reports/extract, multipart field file, with X-Internal-Key and synchronous JSON. AI_SERVICE_URL and AI_INTERNAL_KEY are private server configuration; no fallback secret is used. The adapter maps the checked-in ReportExtractionResponse/LabTestItem schema: report_id, report_date, tests[].name/value/unit/reference_range/page/needs_review/review_reason. Service-derived medical status, critical_alerts and clinical explanation output are intentionally not used in this review checkpoint. A numeric provider value is stringified as its supplied value, not claimed to be original OCR text. No extractor/model version or defined confidence score is supplied, so none is invented.
 
-- Actual FastAPI base URL, extraction/upload endpoint and HTTP method.
-- Authentication mechanism, exact header names and private credential exchange.
-- Multipart field names or alternative transport, supported formats and byte/page limits.
-- Synchronous response or asynchronous job contract, job ID and exact status values.
-- Polling/callback/streaming behavior, framing, timeout, cancellation and retry/idempotency rules.
+These details still require the friend/deployment owner's confirmation before live integration is claimed:
+
+- Actual reachable deployment origin and privately exchanged service key matching X-Internal-Key.
+- Server-enforced byte/page/dimension limits, concurrency and actual error JSON examples (including validation HTTP 422).
+- Whether the synchronous API is final; if asynchronous behavior is added, exact job IDs/status values and polling/callback/stream framing.
+- Provider timeout, cancellation, retry/idempotency, retention and remote deletion guarantees. Local cancellation currently does not confirm provider cancellation.
 - Exact success and error JSON examples, maximum result sizes and privacy/retention/deletion behavior.
-- Extraction fields for test name, raw value, parsed value, units, reference range, report date and source page.
+- Separate original OCR raw value versus parsed value, exact date/page semantics and extractor/model version if available.
 - Indicators for unreadable text and uncertain values, how the user corrects values, and the correction/re-analysis contract.
 
 Proposed fields below are our discussion checklist only; none are confirmed mappings or clinical interpretations:
@@ -57,7 +58,7 @@ Proposed fields below are our discussion checklist only; none are confirmed mapp
 {"tests":[{"testName":null,"rawValue":null,"parsedValue":null,"units":null,"referenceRange":null,"reportDate":null,"sourcePage":null,"unreadable":false,"uncertain":false}],"warnings":[]}
 ```
 
-Proposed error envelope for discussion: `{"error":{"code":"UNCONFIRMED_CODE","message":"Safe message"}}`. The friend's actual examples must replace this proposal before an adapter is written. Nullability, numeric/range representation, date format, page numbering, confidence meaning and job status vocabulary all need agreement. We have not invented an address, endpoint, secret or confirmed mapping. React must continue using owner-authorized Express routes rather than contacting Ollama directly. The next checkpoint is to agree this contract and implement a bounded server-side adapter with synthetic extraction tests; medical analysis remains a separate checkpoint.
+Proposed error envelope for discussion: `{"error":{"code":"UNCONFIRMED_CODE","message":"Safe message"}}`. The friend's actual examples must resolve remaining gaps before live integration is claimed. Nullability, numeric/range representation, date format, page numbering, confidence meaning and job status vocabulary all need agreement. We have not invented an address, endpoint, secret or confirmed mapping. React must continue using owner-authorized Express routes rather than contacting Ollama directly. The next checkpoint is live synthetic verification of the implemented adapter and agreement on a reviewed-data analysis contract; medical analysis remains separate.
 
 ## FastAPI specification supplied by the friend (integration pending)
 
