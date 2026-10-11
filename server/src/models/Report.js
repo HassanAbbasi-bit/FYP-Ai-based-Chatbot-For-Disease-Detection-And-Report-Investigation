@@ -9,6 +9,11 @@ const reportSchema = new mongoose.Schema({
   size: { type: Number, default: 0, min: 0 },
   reservedBytes: { type: Number, required: true, min: 0 },
   sha256: { type: String, select: false },
+  sampleVersion: { type: String, enum: ["synthetic-v1"], select: false },
+  extractionSequence: { type: Number, default: 0 },
+  activeExtractionId: mongoose.Schema.Types.ObjectId,
+  currentResultId: mongoose.Schema.Types.ObjectId,
+  reviewVersion: { type: Number, default: 0 },
   status: { type: String, enum: ["uploading", "uploaded", "deleting"], required: true },
   leaseUntil: { type: Date, required: true },
 }, { timestamps: true, strict: "throw", bufferCommands: false });

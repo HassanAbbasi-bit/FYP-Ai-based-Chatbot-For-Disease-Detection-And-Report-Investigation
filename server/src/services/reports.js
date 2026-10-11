@@ -6,7 +6,7 @@ const { ReportError, reportNotFound, storageUnavailable } = require("./report-er
 const { receiveUpload } = require("./report-upload");
 const { validateReport, validateDeclaredType, safeFilename } = require("./report-validation");
 
-async function createReportService({ connection, config, storage = new LocalReportStorage(config.reportStorageDir), hooks = {} }) {
+async function createReportService({ connection, config, storage = new LocalReportStorage(config.reportStorageDir), hooks = {}, extractionAdapter, extractionAutoRun = true }) {
   const Report = reportModel(connection);
   const User = connection.models.User;
   await Report.init();
@@ -24,6 +24,9 @@ async function createReportService({ connection, config, storage = new LocalRepo
       const record = await Report.findOne({ _id: id, status: "deleting" }).session(session);
       if (!record) return;
       await Report.deleteOne({ _id: record._id, status: "deleting" }, { session });
+      for (const name of ["ExtractionJob", "ExtractionResult", "ReportReview"]) {
+        if (connection.models[name]) await connection.models[name].deleteMany({ reportId: record._id }, { session });
+      }
       await User.updateOne({ _id: record.ownerId }, { $inc: { reportCount: -1, reportBytes: -record.reservedBytes } }, { session });
     });
   }
@@ -109,6 +112,7 @@ async function createReportService({ connection, config, storage = new LocalRepo
     try {
       const deleting = await Report.findOneAndUpdate(scope, { $set: { status: "deleting", leaseUntil: new Date(0) } }, { returnDocument: "after" }).select("+storageKey");
       if (!deleting) throw reportNotFound();
+      await extractions.abortReport(deleting._id);
       await finishDeletion(deleting);
     } catch (error) {
       throw error instanceof ReportError || /^Mongo|Mongoose/.test(error.name || "") ? error : storageUnavailable();
@@ -142,7 +146,11 @@ async function createReportService({ connection, config, storage = new LocalRepo
   }
   const cleanupTimer = setInterval(() => cleanup().catch(() => {}), 60000);
   cleanupTimer.unref();
-  async function close() { clearInterval(cleanupTimer); await cleanupCompletion; await storage.close(); }
-  return { Report, storage, upload, remove, cleanup, close, config };
+  const { createExtractionService } = require("./extractions");
+  let extractions;
+  try { extractions = await createExtractionService({ connection, reports: { Report, storage, upload, config }, adapter: extractionAdapter, autoRun: extractionAutoRun }); }
+  catch (error) { clearInterval(cleanupTimer); await storage.close(); throw error; }
+  async function close() { clearInterval(cleanupTimer); await extractions.close(); await cleanupCompletion; await storage.close(); }
+  return { Report, storage, upload, remove, cleanup, close, config, extractions };
 }
 module.exports = { createReportService };

@@ -6,6 +6,7 @@ const { fail, errorHandler } = require("./middleware/errors");
 const { checkOrigin, requireAuth } = require("./middleware/security");
 const { conversationRoutes } = require("./routes/conversations");
 const { reportRoutes } = require("./routes/reports");
+const { extractionRoutes } = require("./routes/extractions");
 
 function createApp({ config, connection, store, limits = {}, generation, reports }) {
   if (!store) throw new Error("A MongoDB session store is required.");
@@ -42,7 +43,7 @@ function createApp({ config, connection, store, limits = {}, generation, reports
   });
   app.use("/api/auth", authRoutes({ User, config, limits }));
   app.use("/api/conversations", requireAuth(User), conversationRoutes({ connection, limits, generation }));
-  app.use("/api/reports", requireAuth(User), reportRoutes({ reports, limits }));
+  app.use("/api/reports", requireAuth(User), extractionRoutes(reports, limits), reportRoutes({ reports, limits }));
   app.use((req, res) => fail(res, 404, "NOT_FOUND", "This endpoint does not exist."));
   app.use(errorHandler(connection));
   return app;
