@@ -6,7 +6,7 @@ Current checkpoint: MongoDB-backed accounts, conversations, and private PDF/JPEG
 
 - `client/`: React/Vite screens and relative `/api` requests (Hassan).
 - `server/`: Express, Mongoose users/conversations/messages/request records, MongoDB sessions (Hassan).
-- `ai-service/`: friend's planned Python/FastAPI/Ollama implementation; absent from this branch.
+- `ai-backend/`: friend's Python/FastAPI/Ollama service; maintained separately and not connected to Express yet.
 - `docs/`: shared setup and API agreements.
 
 ## One-time setup
@@ -78,4 +78,21 @@ This remains a development foundation, not a production-readiness or security ce
 
 Production needs HTTPS, an exact HTTPS `APP_ORIGIN`, private secrets, protected MongoDB access, a same-origin `/api` reverse proxy, and deployment-specific review. Vite's development proxy is not a production reverse proxy. In-process rate limits reset on restart and must be replaced with a shared store before running multiple instances.
 
-Next checkpoint: confirm the [AI integration agreement](docs/ai-integration-contract.md) with your friend, then implement and verify a bounded Express-to-FastAPI adapter. Do not expose AI credentials or connect React directly to Ollama.
+Next checkpoint: verify the supplied [AI integration agreement](docs/ai-integration-contract.md) with your friend, then implement and verify a bounded Express-to-FastAPI adapter. Do not expose AI credentials or connect React directly to Ollama.
+
+## Separate AI backend
+
+The friend-provided AI service is now included under `ai-backend/`. Its setup and dependencies are documented in [its README](ai-backend/README.md). Starting it does not connect the React/Express demo chat or uploaded reports to AI. No live inference or clinical validation was performed during this conflict resolution.
+
+### 2. Start the AI Backend (Terminal 1)
+```powershell
+# From the repository root (or double-click start_backend.bat):
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
+```
+* **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Health Check**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
+* **Agreed Contract**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
+* **Run Tests**: `pytest`
+
+---

@@ -1,0 +1,165 @@
+{
+  "contract_version": "1.0.0",
+  "notes": "Agreed sample API responses between Friend 1 (FastAPI/AI) and Friend 2 (Express/MERN).",
+  
+  "endpoints": {
+    "health_check": {
+      "path": "/api/health",
+      "method": "GET",
+      "response": {
+        "status": "healthy",
+        "service": "Medical AI Backend",
+        "version": "1.0.0",
+        "ollama_connected": true,
+        "active_model": "llama3.2:3b",
+        "gpu_available": true
+      }
+    },
+
+    "chat": {
+      "path": "/api/chat",
+      "method": "POST",
+      "request": {
+        "conversation_id": "conv_123456",
+        "message": "I have been experiencing a mild headache and tiredness since yesterday.",
+        "history": [
+          { "role": "user", "content": "Hello" },
+          { "role": "assistant", "content": "Hello! How can I assist you with your health questions today?" }
+        ]
+      },
+      "response": {
+        "reply": "Thank you for sharing your symptoms. A mild headache combined with fatigue can be caused by several everyday factors such as lack of sleep, mild dehydration, or eye strain. However, to better assess your situation, could you let me know if you also have a fever, nausea, or neck stiffness?",
+        "suggested_follow_ups": [
+          "Do you have a fever or chills?",
+          "Are you sensitive to bright lights?",
+          "How many hours of sleep did you get last night?"
+        ],
+        "urgency_level": "low",
+        "disclaimer": "This information is educational and not a substitute for professional medical advice."
+      }
+    },
+
+    "symptom_assessment": {
+      "path": "/api/symptoms/assess",
+      "method": "POST",
+      "request": {
+        "user_id": "usr_987",
+        "symptoms": ["headache", "fatigue", "blurred vision"],
+        "duration": "2 days",
+        "severity": "moderate"
+      },
+      "response": {
+        "assessment_id": "asmt_20261010_01",
+        "extracted_symptoms": ["headache", "fatigue", "blurred vision"],
+        "urgency_level": "moderate",
+        "is_red_flag": false,
+        "escalation_message": null,
+        "possible_causes": [
+          {
+            "condition": "Tension Headache / Eye Strain",
+            "likelihood": "possible",
+            "rationale": "Prolonged screen time or stress can trigger headaches accompanied by temporary vision fatigue."
+          },
+          {
+            "condition": "Migraine with Aura",
+            "likelihood": "possible",
+            "rationale": "Headaches associated with blurred vision or visual changes often align with migraine episodes."
+          }
+        ],
+        "recommended_questions_for_doctor": [
+          "Could my vision changes be related to prescription glasses or eye pressure?",
+          "What diagnostic checks are recommended if blurred vision persists?"
+        ],
+        "self_care_notes": "Rest in a dimly lit room, stay hydrated, and avoid heavy screen exposure. Seek immediate emergency care if you experience sudden severe headache or one-sided weakness."
+      }
+    },
+
+    "report_upload_and_extract": {
+      "path": "/api/reports/extract",
+      "method": "POST",
+      "request": "multipart/form-data: file (PDF, PNG, JPG)",
+      "response": {
+        "report_id": "rep_cbc_20261010",
+        "report_date": "2026-10-05",
+        "patient_name_redacted": true,
+        "tests": [
+          {
+            "test_id": "t1",
+            "name": "Hemoglobin",
+            "value": 11.2,
+            "unit": "g/dL",
+            "reference_range": "13.5 - 17.5",
+            "status": "low",
+            "page": 1,
+            "needs_review": false
+          },
+          {
+            "test_id": "t2",
+            "name": "White Blood Cell Count (WBC)",
+            "value": 7.4,
+            "unit": "10^3/uL",
+            "reference_range": "4.5 - 11.0",
+            "status": "normal",
+            "page": 1,
+            "needs_review": false
+          },
+          {
+            "test_id": "t3",
+            "name": "Platelet Count",
+            "value": 145,
+            "unit": "10^3/uL",
+            "reference_range": "150 - 450",
+            "status": "low",
+            "page": 1,
+            "needs_review": false
+          },
+          {
+            "test_id": "t4",
+            "name": "Serum Ferritin",
+            "value": 14.0,
+            "unit": "ng/mL",
+            "reference_range": "20.0 - 250.0",
+            "status": "low",
+            "page": 2,
+            "needs_review": false
+          }
+        ],
+        "validation_flags": [
+          {
+            "test_name": "Platelet Count",
+            "issue": "borderline_low",
+            "message": "Value is slightly below normal threshold (145 vs 150 min)."
+          }
+        ],
+        "critical_alerts": []
+      }
+    },
+
+    "report_explanation": {
+      "path": "/api/reports/{report_id}/explain",
+      "method": "POST",
+      "response": {
+        "report_id": "rep_cbc_20261010",
+        "summary": "Your Complete Blood Count (CBC) shows mild microcytic anemia, indicated by slightly lower Hemoglobin and Serum Ferritin levels.",
+        "findings": [
+          {
+            "test_name": "Hemoglobin & Ferritin",
+            "finding": "Below standard reference ranges",
+            "plain_language_explanation": "Hemoglobin carries oxygen throughout your body, and ferritin reflects stored iron. Lower numbers frequently correlate with iron-deficiency fatigue.",
+            "citations": [
+              {
+                "source": "Clinical Hematology Guidelines 2025",
+                "passage": "Serum ferritin below 30 ng/mL strongly correlates with depleted iron stores."
+              }
+            ]
+          }
+        ],
+        "doctor_discussion_questions": [
+          "Should I begin dietary iron adjustments or an oral iron supplement?",
+          "When should we schedule a follow-up CBC to verify improvement?"
+        ],
+        "disclaimer": "AI interpretations are for preparation only. Always consult your physician for clinical diagnosis and treatment plans."
+      }
+    }
+  }
+}

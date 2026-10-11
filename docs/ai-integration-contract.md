@@ -1,6 +1,6 @@
-# AI integration agreement — awaiting confirmation
+# AI integration agreement — current app and supplied service contract
 
-This is our implemented Express boundary and a proposal for future integration. **No friend-provided FastAPI endpoint, address, authentication, or schema is confirmed.** The friend's implementation has not been modified, contacted, or inferred from a different branch.
+This document records the implemented React/Express boundary, future adapter requirements, and the friend-supplied FastAPI specification now present on main. The AI implementation is preserved unchanged. Its supplied contract is recorded below; runtime behavior and Express integration have not been verified in this checkpoint.
 
 ## Confirmed current React → Express format
 
@@ -58,3 +58,53 @@ Proposed fields below are our discussion checklist only; none are confirmed mapp
 ```
 
 Proposed error envelope for discussion: `{"error":{"code":"UNCONFIRMED_CODE","message":"Safe message"}}`. The friend's actual examples must replace this proposal before an adapter is written. Nullability, numeric/range representation, date format, page numbering, confidence meaning and job status vocabulary all need agreement. We have not invented an address, endpoint, secret or confirmed mapping. React must continue using owner-authorized Express routes rather than contacting Ollama directly. The next checkpoint is to agree this contract and implement a bounded server-side adapter with synthetic extraction tests; medical analysis remains a separate checkpoint.
+
+## FastAPI specification supplied by the friend (integration pending)
+
+The following details were supplied on main. Performance figures are the supplier's claims, not checks performed during this merge. The example is documentation only and does not replace the implemented conversation lifecycle.
+
+| Item | Confirmed Value | Details |
+| --- | --- | --- |
+| **Base URL** | `http://127.0.0.1:8000` | Configured via `AI_SERVICE_URL` in `server/.env`. |
+| **Chat Route** | `POST /api/chat` | Main conversational endpoint with red-flag emergency detection. |
+| **Request Schema** | `{"message": string, "conversation_id": string, "history": [{"role": "user"|"assistant", "content": string}]}` | Max length 2,000 characters; `history` is optional list of prior turns. |
+| **Success Response** | `{"reply": string, "conversation_id": string, "urgency_level": "low"|"moderate"|"high"|"emergency", "red_flag_detected": boolean, "follow_up_questions": [string]}` | Non-streaming JSON response. |
+| **Error Handling** | HTTP 400 (`detail`: validation error), HTTP 401 (`detail`: invalid API key), HTTP 500 (`detail`: service error) | Standard FastAPI error envelope. |
+| **Authentication** | Header: `X-Internal-Key: REPLACE_WITH_PRIVATE_SERVICE_KEY` | Express passes this header in internal HTTP requests. |
+| **Transport** | Non-streaming JSON over HTTP/1.1 | Standard RESTful API contract. |
+| **Context & Sessions** | Express passes `conversation_id` and previous `history` turns | Stateless on FastAPI; Express manages conversation persistence if needed. |
+| **Timing & Latency** | ~7 seconds on local GPU inference | Express Axios/fetch timeout recommended: 30 seconds (`timeout: 30000`). |
+| **Symptom Route** | `POST /api/symptoms/assess` | Body: `{"symptoms": [string], "duration": string}`. |
+| **Report Upload** | `POST /api/reports/extract` | Multipart form-data with `file=@report.jpg`. Parses tests in < 2 seconds. |
+| **Report Explain** | `POST /api/reports/{test_id}/explain` | Grounded clinical explanation for a test parameter. Sub-millisecond repeat cached retrieval. |
+| **Live Contract** | `GET /api/sample/contract` | Returns full sample response payload for all endpoints. |
+
+### Express Adapter Example (`server/src/services/chat.js`)
+```javascript
+const axios = require('axios');
+
+async function getChatReply(message, history = [], conversationId = 'conv_default') {
+  const response = await axios.post(
+    `${process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000'}/api/chat`,
+    {
+      message,
+      history,
+      conversation_id: conversationId,
+    },
+    {
+      headers: {
+        'X-Internal-Key': process.env.AI_INTERNAL_KEY,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    }
+  );
+  return response.data;
+}
+
+module.exports = { getChatReply };
+```
+
+### Reconcile supplied details with source before integration
+
+The checked-in `ai-backend/app/models/schemas.py` chat response declares `reply`, `suggested_follow_ups`, `urgency_level` and `disclaimer`; this differs from the supplied table. The report explanation route parameter in source is `report_id`. Confirm those differences before mapping fields. The supplied extraction route is synchronous multipart with field `file`; job IDs/status polling, cancellation, bounded limits, separate raw/parsed values and correction/re-analysis still need agreement. Earlier checklist fields remain proposals for missing details, not a claim that no service code exists. Configure any future service key privately without a hardcoded fallback. Do not copy the adapter example over the current transaction/lease-aware conversation implementation.
