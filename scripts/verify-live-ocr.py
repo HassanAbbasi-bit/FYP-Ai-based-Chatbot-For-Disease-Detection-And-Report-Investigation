@@ -11,7 +11,7 @@ draw.multiline_text((50,50),text,font=font,fill='black',spacing=35)
 file=root/'synthetic-blood-cp.png';image.save(file)
 with httpx.Client(timeout=30) as client:
     health=client.get('http://127.0.0.1:8000/api/health').json()
-    print('Actual service readiness:', {'reachable':True,'ocr':health['ocr_available'],'model':health['ollama_connected']})
+    print('Actual service readiness:', {'reachable':True,'ocr':health['ocr_available'],'model':health['ollama_connected'] and health['active_model'] in health['available_models']})
     with file.open('rb') as f:
         r=client.post('http://127.0.0.1:8000/api/reports/extract',headers={'X-Internal-Key':settings.INTERNAL_API_KEY},files={'file':('synthetic-blood-cp.png',f,'image/png')})
     assert r.status_code==200, 'Actual image OCR did not complete'

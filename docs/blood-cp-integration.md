@@ -36,3 +36,10 @@ Reviewed endpoints are registered before the legacy dynamic `/reports/{report_id
 ## Verification
 
 Tests use disposable MongoDB databases, synthetic reports/accounts and local stub model output. They cover corrected-data transfer, removed/unknown rows, report chat, revision mismatch, unavailable models, late-publication fencing, authentication, privacy and existing application regressions. Browser checks cover desktop/mobile layout and account/report workflows. Live OCR is additionally verified with a generated image containing synthetic CBC entries; this is software verification, not a medical evaluation.
+
+### Checked on this computer, 12 October 2026
+
+- 108 existing server tests and 4 new reviewed-AI integration tests passed; 19 FastAPI tests and 14 frontend tests passed. Frontend lint/build passed. Twelve Chrome browser workflows passed, including desktop/mobile overflow and privacy controls.
+- Ollama and Tesseract installed successfully. Real HTTP image extraction returned four synthetic CBC rows with a missing date left null.
+- The llama3.2:3b model download failed after registry connection timeouts. The service is reachable, but the model is not installed/ready; live inference has not been verified. Retry `ollama pull llama3.2:3b` when the network can reach the Ollama model registry.
+- Existing MongoDB credentials were preserved. The Atlas connection failed with network timeouts to all configured members; this was not an authentication rejection. Check cluster availability, Atlas current-IP access, and network connectivity, then restart Express. Do not replace credentials based only on this network error.
