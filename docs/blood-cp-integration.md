@@ -15,13 +15,13 @@ The supplied AI backend has no implemented longitudinal comparison or doctor-vis
 
 ## Start on this computer
 
-1. Run Ollama and ensure the model exists: `ollama pull llama3.2:3b` (one-time download). If Ollama is not running, use `ollama serve` in its own terminal.
+1. Run `start_ollama.bat` (or `start_project.bat`) to use the project model store on drive F. Ensure the model exists: `ollama pull llama3.2:3b` (one-time download). The launcher starts Ollama when needed; model binaries are in `ai-backend/.ollama-models/` and are ignored by Git.
 2. Tesseract OCR is needed for images and scanned PDFs. Configure `TESSERACT_CMD` privately in `ai-backend/.env` if its installation differs from the automatically detected Windows path.
 3. Keep your MongoDB URI and session secret in `server/.env`. Run `node scripts/configure-local-ai.cjs` from the project root to set both FastAPI providers and save matching random private keys. Existing database credentials are preserved. This script refuses to replace an existing nonlocal AI deployment.
-4. Double-click `start_project.bat`. It starts FastAPI on 127.0.0.1:8000, Express on 127.0.0.1:5000, and Vite on localhost:5173. Open http://localhost:5173.
+4. Double-click `start_project.bat`. It starts Ollama if needed, FastAPI on 127.0.0.1:8000, Express on 127.0.0.1:5000, and Vite on localhost:5173. Open http://localhost:5173.
 5. Sign in, open Settings, enable chat and report processing consent and save. In Reports, upload an image/PDF, run extraction, check/correct entries, mark reviewed, then interpret the reviewed report or open its conversation.
 
-The dashboard separately shows configured integration, backend reachability, installed/running model readiness and OCR readiness. Model inference can take longer than an ordinary API call; deadlines and processing leases accommodate the supplied 120-second model timeout. Cancellation is local and does not claim to cancel provider inference.
+The dashboard separately shows configured integration, backend reachability, installed/running model readiness and OCR readiness. Model inference can take longer than an ordinary API call; deadlines and processing leases accommodate a 480-second local model timeout with longer Express/client deadlines and publication leases. Cancellation is local and does not claim to cancel provider inference.
 
 For a fresh checkout, install Node dependencies in `server` and `client`. Create `.venv` using Python 3.12+, then install `ai-backend/requirements-runtime.txt`. Full optional development/retrieval dependencies remain in `ai-backend/requirements.txt`; the implemented routes do not depend on a Chroma database. Do not commit `.env`, originals, model files or virtual environments.
 
@@ -37,9 +37,21 @@ Reviewed endpoints are registered before the legacy dynamic `/reports/{report_id
 
 Tests use disposable MongoDB databases, synthetic reports/accounts and local stub model output. They cover corrected-data transfer, removed/unknown rows, report chat, revision mismatch, unavailable models, late-publication fencing, authentication, privacy and existing application regressions. Browser checks cover desktop/mobile layout and account/report workflows. Live OCR is additionally verified with a generated image containing synthetic CBC entries; this is software verification, not a medical evaluation.
 
-### Checked on this computer, 12 October 2026
+### Current local verification
 
-- 108 existing server tests and 4 new reviewed-AI integration tests passed; 19 FastAPI tests and 14 frontend tests passed. Frontend lint/build passed. Twelve Chrome browser workflows passed, including desktop/mobile overflow and privacy controls.
-- Ollama and Tesseract installed successfully. Real HTTP image extraction returned four synthetic CBC rows with a missing date left null.
-- The llama3.2:3b model download failed after registry connection timeouts. The service is reachable, but the model is not installed/ready; live inference has not been verified. Retry `ollama pull llama3.2:3b` when the network can reach the Ollama model registry.
-- Existing MongoDB credentials were preserved. The Atlas connection failed with network timeouts to all configured members; this was not an authentication rejection. Check cluster availability, Atlas current-IP access, and network connectivity, then restart Express. Do not replace credentials based only on this network error.
+- All 113 server tests, 22 FastAPI tests and 14 frontend tests passed; frontend lint and production build passed.
+- The original llama3.2:3b model is installed. Actual model chat, symptom assessment, image OCR, correction, saved reviewed-report interpretation and report-specific conversation have passed live checks using synthetic data.
+- Atlas connected and Express readiness passed after the current IP was added to Atlas Network Access. Existing database credentials were preserved.
+- During local inference, the disposable test database briefly returned 503. Status reads recover without resubmitting inference; the interface clears a recovered status-read error while retaining action errors.
+- Live Chrome checks passed: real image OCR, corrected reviewed findings, doctor questions, report conversation containing 13.0, symptoms, mobile overflow and recovery from a simulated status outage; zero page errors.
+- These results supersede the earlier model-download and Atlas network failures. Tests verify software behavior, not clinical accuracy.
+
+## Runtime reliability fixes
+
+A reproduced Ollama HTTP 500 reported failure to allocate the approximately 2 GB CPU model buffer. Drive C had only about 230 MB free and RAM was heavily occupied. The existing 1.9 GB model store was moved intact to drive F, recovering about 2 GB on C without touching account data. Ollama's model directory and the local launcher now use the preserved F-drive store.
+
+Context memory scales with reviewed report size; short requests share a 4K context and report prompts omit internal IDs and empty metadata. Excessively large context is rejected explicitly rather than silently truncated. Cold loading on this CPU was measured at about 45 seconds, with the first streamed token arriving around 66 seconds. Request deadlines and publication leases now accommodate this startup time.
+
+Reviewed explanations use Ollama JSON-schema constrained output and Pydantic validation. Valid JSON alone is insufficient: required field types and reviewed test identity must match. Invalid output is INVALID_MODEL_OUTPUT (502); a model timeout is MODEL_TIMEOUT (504); unavailable-model errors remain separate. No failed result is replaced with fabricated findings.
+
+To run an explicit live check, generate the synthetic image with `python scripts/verify-live-ocr.py`, then run `node scripts/verify-live-ai.js` from server/. The live check uses the actual model and a disposable database, never the configured Atlas account records.

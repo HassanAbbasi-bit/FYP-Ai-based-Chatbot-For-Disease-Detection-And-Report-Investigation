@@ -74,7 +74,7 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
     try {
       await Analysis.updateMany({ state: 'running', leaseUntil: { $lt: new Date() } }, { $set: { state: 'failed', errorCode: 'INTERRUPTED', completedAt: new Date(), leaseToken: null, leaseUntil: null } });
       while (!closed && active.size < 2) {
-        const job = await Analysis.findOneAndUpdate({ state: 'queued' }, { $set: { state: 'running', leaseToken: randomUUID(), leaseUntil: new Date(Date.now()+150000) } }, { sort: { createdAt: 1 }, returnDocument: 'after' });
+        const job = await Analysis.findOneAndUpdate({ state: 'queued' }, { $set: { state: 'running', leaseToken: randomUUID(), leaseUntil: new Date(Date.now()+(reports.config.aiRequestTimeoutMs || 485000)+30000) } }, { sort: { createdAt: 1 }, returnDocument: 'after' });
         if (!job) break;
         const promise = run(job).finally(() => active.delete(promise)); active.add(promise);
       }

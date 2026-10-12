@@ -52,3 +52,27 @@ def test_small_tables_survive_offline_model_and_platelets_are_not_admin_text():
         tests, _, _, date = asyncio.run(extract_structured_tests_ai(text))
         assert len(tests) == expected
         assert date is None
+
+def test_context_allocation_fits_small_reports_and_rejects_oversized_text():
+    from app.api.routes.reviewed import report_context_tokens
+    from fastapi import HTTPException
+    assert report_context_tokens('Synthetic small CBC', 1800) == 4096
+    text = 'μ' * 4000
+    assert report_context_tokens(text, 500) >= len(text.encode('utf-8')) + 500 + 256
+    with pytest.raises(HTTPException) as e:
+        report_context_tokens('x' * 33000, 500)
+    assert e.value.status_code == 413
+
+def test_valid_json_with_wrong_types_is_not_reported_as_model_offline(monkeypatch):
+    async def generate(**kwargs): return json.dumps({'summary':'Synthetic summary','findings':[{'test_name':'Synthetic measurement','finding':None,'plain_language_explanation':'Fixture'}],'doctor_discussion_questions':[]})
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    r=client.post('/api/reports/reviewed/explain',headers=headers,json=payload)
+    assert r.status_code==502
+    assert r.json()['detail']['code']=='INVALID_MODEL_OUTPUT'
+
+def test_model_timeout_has_its_own_error_code(monkeypatch):
+    async def generate(**kwargs): raise TimeoutError('Synthetic timeout')
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    r=client.post('/api/reports/reviewed/explain',headers=headers,json=payload)
+    assert r.status_code==504
+    assert r.json()['detail']['code']=='MODEL_TIMEOUT'

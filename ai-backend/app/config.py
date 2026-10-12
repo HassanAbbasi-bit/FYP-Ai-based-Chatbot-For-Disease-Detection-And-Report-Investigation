@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     DEFAULT_MODEL: str = "llama3.2:3b"
     EMBEDDING_MODEL: str = "nomic-embed-text"
-    MODEL_TIMEOUT_SECONDS: int = 120
-    OLLAMA_KEEP_ALIVE: str = "60m"
-    OLLAMA_NUM_CTX: int = 2048
+    MODEL_TIMEOUT_SECONDS: int = 480
+    OLLAMA_KEEP_ALIVE: str = "5m"
+    OLLAMA_NUM_CTX: int = 4096
     OLLAMA_NUM_THREAD: int = 4
 
     

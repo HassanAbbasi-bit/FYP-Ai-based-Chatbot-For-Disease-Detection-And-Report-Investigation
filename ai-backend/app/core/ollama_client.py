@@ -1,4 +1,5 @@
 import httpx
+import logging
 from typing import Dict, Any, List, Optional
 from app.config import settings
 
@@ -48,6 +49,7 @@ class OllamaClient:
         temperature: float = 0.2,
         max_tokens: Optional[int] = 450,
         json_mode: bool = False,
+        response_schema: Optional[Dict[str, Any]] = None,
         context_tokens: Optional[int] = None
     ) -> str:
         """
@@ -57,6 +59,7 @@ class OllamaClient:
             "temperature": temperature,
             "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
+            "use_mmap": True,
             "top_p": 0.9,
             "top_k": 40
         }
@@ -70,7 +73,9 @@ class OllamaClient:
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
             "options": options
         }
-        if json_mode:
+        if response_schema is not None:
+            payload["format"] = response_schema
+        elif json_mode:
             payload["format"] = "json"
         if system_prompt:
             payload["system"] = system_prompt
@@ -81,6 +86,7 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("response", "")
             else:
+                logging.getLogger(__name__).warning("MODEL_REQUEST_REJECTED HTTP=%s", res.status_code)
                 raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(
@@ -106,6 +112,7 @@ class OllamaClient:
             "temperature": temperature,
             "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
+            "use_mmap": True,
             "top_p": 0.9,
             "top_k": 40
         }
@@ -125,6 +132,7 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("message", {}).get("content", "")
             else:
+                logging.getLogger(__name__).warning("MODEL_REQUEST_REJECTED HTTP=%s", res.status_code)
                 raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(

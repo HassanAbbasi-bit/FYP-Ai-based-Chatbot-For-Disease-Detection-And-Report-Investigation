@@ -12,6 +12,6 @@ const origin=server.AI_SERVICE_URL||'http://127.0.0.1:8000';
 if(!['http://127.0.0.1:8000','http://localhost:8000'].includes(origin))throw new Error('An existing nonlocal AI origin is configured. Keep its deployment key/settings rather than running local setup.');
 const key=server.AI_INTERNAL_KEY||ai.INTERNAL_API_KEY||randomBytes(32).toString('hex');
 function update(file,content,values){let lines=content.split(/\r?\n/);for(const [name,value]of Object.entries(values)){lines=lines.filter(line=>!new RegExp('^\\s*(?:export\\s+)?'+name+'\\s*=').test(line));lines.push(name+'='+JSON.stringify(String(value)));}fs.writeFileSync(file,lines.filter((line,index)=>line||index<lines.length-1).join('\n')+'\n');}
-update(serverFile,serverText,{CHAT_PROVIDER:'fastapi',EXTRACTION_PROVIDER:'fastapi',AI_SERVICE_URL:origin,AI_INTERNAL_KEY:key,EXTRACTION_TIMEOUT_MS:'125000'});
-update(aiFile,aiText,{INTERNAL_API_KEY:key,DEBUG:'false',DEFAULT_MODEL:ai.DEFAULT_MODEL||'llama3.2:3b'});
+update(serverFile,serverText,{CHAT_PROVIDER:'fastapi',EXTRACTION_PROVIDER:'fastapi',AI_SERVICE_URL:origin,AI_INTERNAL_KEY:key,EXTRACTION_TIMEOUT_MS:'485000',AI_REQUEST_TIMEOUT_MS:'485000'});
+update(aiFile,aiText,{INTERNAL_API_KEY:key,DEBUG:'false',DEFAULT_MODEL:ai.DEFAULT_MODEL||'llama3.2:3b',MODEL_TIMEOUT_SECONDS:'480',OLLAMA_NUM_CTX:'4096',OLLAMA_KEEP_ALIVE:'5m'});
 console.log('Local FastAPI integration configured. Matching private keys were saved without printing them. MongoDB credentials were preserved.');

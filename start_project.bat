@@ -1,5 +1,6 @@
 @echo off
 cd /d "%~dp0"
+start "Blood CP Ollama" cmd /k start_ollama.bat
 start "Blood CP AI backend" cmd /k start_backend.bat
 start "Blood CP Express" cmd /k "cd /d server && npm.cmd run dev"
 start "Blood CP Frontend" cmd /k "cd /d client && npm.cmd run dev"

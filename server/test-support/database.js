@@ -12,7 +12,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { createReportService } = require("../src/services/reports");
 
-async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000, chat: 1000, csrf: 1000, create: 1000, history: 10000, upload: 1000, reports: 10000, download: 1000, extractionReads: 10000, extractionWrites: 1000, extractionStarts: 1000 }, generation, reportConfig = {}, reportHooks, extractionAdapter, extractionAutoRun = false, origin = "http://localhost:5173" } = {}) {
+async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000, chat: 1000, csrf: 1000, create: 1000, history: 10000, upload: 1000, reports: 10000, download: 1000, extractionReads: 10000, extractionWrites: 1000, extractionStarts: 1000 }, generation, reportConfig = {}, reportHooks, extractionAdapter, extractionAutoRun = false, databaseTimeoutMs = 1500, origin = "http://localhost:5173" } = {}) {
   let mongo;
   let connection;
   let store;
@@ -35,7 +35,7 @@ async function isolatedServer({ port = 0, limits = { register: 1000, login: 1000
     mongo = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: "wiredTiger", ip: "127.0.0.1" } });
     testRoot = await fs.mkdtemp(path.join(os.tmpdir(), "fyp-reports-test-"));
     const config = { ...readConfig({ MONGODB_URI: mongo.getUri("fyp_auth_isolated"), SESSION_SECRET: randomBytes(32).toString("hex"), APP_ORIGIN: origin, REPORT_STORAGE_DIR: testRoot }), ...reportConfig, reportStorageDir: testRoot };
-    connection = await mongoose.createConnection(config.mongoUri, { serverSelectionTimeoutMS: 1500, connectTimeoutMS: 1500, heartbeatFrequencyMS: 500 }).asPromise();
+    connection = await mongoose.createConnection(config.mongoUri, { serverSelectionTimeoutMS: databaseTimeoutMs, connectTimeoutMS: databaseTimeoutMs, heartbeatFrequencyMS: 500 }).asPromise();
     const User = connection.model("User", userSchema);
     await User.init();
     await initializeConversations(connection);

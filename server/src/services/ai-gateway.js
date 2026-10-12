@@ -12,9 +12,15 @@ function aiGateway({ config, connection }) {
     if (active >= 2) throw new ReportError(503, "AI_BUSY", "The AI service is busy. Retry explicitly shortly.");
     active++;
     try {
-      const signal = AbortSignal.timeout(125000);
+      const signal = AbortSignal.timeout(config.aiRequestTimeoutMs || 485000);
       const response = await fetch(`${config.aiServiceUrl}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Internal-Key": config.aiInternalKey }, body: JSON.stringify(body), signal, redirect: "error" });
-      if (!response.ok) { await response.body?.cancel(); throw new ReportError(response.status===503?503:502,response.status===503?'MODEL_UNAVAILABLE':'AI_SERVICE_ERROR',response.status===503?'The language model is unavailable. Start Ollama and the configured model, then retry.':'The AI service rejected this request. No automatic retry was made.'); }
+      if (response.status===413) {await response.body?.cancel();throw new ReportError(413,'AI_CONTEXT_TOO_LARGE','The reviewed entries or conversation exceed the model context. Shorten entry text or open a new report conversation.');}
+      if ([502,504].includes(response.status)) {
+        let data;try{data=await limitedJson(response,signal,8192);}catch{await response.body?.cancel().catch(()=>{});}
+        const known={INVALID_MODEL_OUTPUT:[502,'The model returned data that did not match the report format. No interpretation was saved.'],MODEL_TIMEOUT:[504,'The model did not finish before its deadline. No automatic retry was made.']};
+        const detail=known[data?.detail?.code];if(detail)throw new ReportError(detail[0],data.detail.code,detail[1]);
+      }
+      if (!response.ok) { await response.body?.cancel(); throw new ReportError(response.status===503?503:502,response.status===503?'MODEL_UNAVAILABLE':'AI_SERVICE_ERROR',response.status===503?'The model could not complete the request. Check Ollama and available memory, then retry.':'The AI service rejected this request. No automatic retry was made.'); }
       return await limitedJson(response, signal, 65536);
     } catch (e) { if (e instanceof ReportError) throw e; throw new ReportError(503, "AI_UNAVAILABLE", "The AI service could not complete the request. Provider completion may be unknown; no automatic retry was made."); }
     finally { active--; }

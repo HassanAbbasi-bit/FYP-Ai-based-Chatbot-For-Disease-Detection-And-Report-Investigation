@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import Feedback from './Feedback';
 export default function ReportResults({ report, onExpired, onOpenChat }) {
- const [data,setData] = useState(null), [review,setReview] = useState(null), [error,setError] = useState(''), [busy,setBusy] = useState(false);
- const callbacks = useRef({onExpired,onOpenChat}), controllers = useRef(new Set()), alive = useRef(true), request = useRef(null);
+ const [data,setData] = useState(null), [review,setReview] = useState(null), [error,setError] = useState(''), [readError,setReadError] = useState(''), [busy,setBusy] = useState(false);
+ const callbacks = useRef({onExpired,onOpenChat}), controllers = useRef(new Set()), alive = useRef(true), reading = useRef(false), request = useRef(null);
  useEffect(()=>{callbacks.current={onExpired,onOpenChat};},[onExpired,onOpenChat]);
  const load = useCallback(async()=>{
+  if(reading.current)return;reading.current=true;
   const c = new AbortController(); controllers.current.add(c);
-  try { const [a,r] = await Promise.all([api(`/reports/${report.id}/analyses`,{signal:c.signal}),api(`/reports/${report.id}/extraction`,{signal:c.signal})]); if(alive.current&&!c.signal.aborted){setData(a);setReview(r.review);const intended=request.current&&a.analyses.find(j=>j.requestId===request.current.requestId);if(intended&&!['queued','running'].includes(intended.state))request.current=null;} }
-  catch(e){if(alive.current&&e.name!=='AbortError'){if(e.status===401)callbacks.current.onExpired();else setError(e.message);}}finally{controllers.current.delete(c);}
+  try { const [a,r] = await Promise.all([api(`/reports/${report.id}/analyses`,{signal:c.signal}),api(`/reports/${report.id}/extraction`,{signal:c.signal})]); if(alive.current&&!c.signal.aborted){setData(a);setReview(r.review);setReadError('');const intended=request.current&&a.analyses.find(j=>j.requestId===request.current.requestId);if(intended&&!['queued','running'].includes(intended.state))request.current=null;} }
+  catch(e){if(alive.current&&e.name!=='AbortError'){if(e.status===401)callbacks.current.onExpired();else setReadError(e.message);}}finally{controllers.current.delete(c);reading.current=false;}
  },[report.id]);
  useEffect(()=>{alive.current=true;const active=controllers.current;const timer=setTimeout(load,0),poll=setInterval(load,3000);return()=>{alive.current=false;clearTimeout(timer);clearInterval(poll);active.forEach(c=>c.abort());active.clear();};},[load]);
  async function action(path,body){if(busy)return;setBusy(true);setError('');const c=new AbortController();controllers.current.add(c);try{await api(path,{method:'POST',body,signal:c.signal});if(alive.current&&!c.signal.aborted)await load();}catch(e){if(alive.current&&e.name!=='AbortError'){if(e.status===401)callbacks.current.onExpired();else setError(e.message);}}finally{controllers.current.delete(c);if(alive.current)setBusy(false);}}
@@ -17,6 +18,7 @@ export default function ReportResults({ report, onExpired, onOpenChat }) {
  <p className="demo-banner">{data?.demo?'DEMO — dedicated synthetic sample. Results copy reviewed entries; no medical interpretation is performed.':data?.realAvailable?'AI interpretation uses your saved reviewed values and reference ranges. A running model and report processing consent are required.':'Connect the AI service to interpret your reviewed report.'}</p>
  <p>User-reviewed means checked by you, not clinically validated. Save and mark your entries reviewed first. Report processing consent is required in Settings.</p>
  {error&&<p className="error" role="alert">{error}</p>}
+ {readError&&<p className="error" role="status">{readError} Status checks will retry; no new interpretation is submitted.</p>}
  <button className="secondary" onClick={load} disabled={busy}>Refresh saved revision and results</button>
  <button disabled={busy||Boolean(pending)||!data?.available||review?.status!=='reviewed'} onClick={()=>{request.current||={requestId:crypto.randomUUID(),reviewVersion:review.version};action(`/reports/${report.id}/analyses`,request.current);}}>{data?.demo?'Request synthetic result':'Interpret reviewed report'}</button>
  {pending&&<><p role="status">{pending.state}</p><button className="secondary" disabled={busy} onClick={()=>action(`/reports/${report.id}/analyses/${pending.id}/cancel`,{})}>Cancel local attempt</button></>}
