@@ -1,3 +1,11 @@
+# Current Blood CP AI integration
+
+The reviewed-data integration is now implemented in both Express and FastAPI. See [the current integration and startup guide](blood-cp-integration.md) for active contracts, supported features and verification. General chat, symptoms, extraction, reviewed interpretation and report chat are connected. FastAPI uses a matching private internal key even in debug mode. Clinical accuracy, verified retrieval citations, real longitudinal comparison and structured doctor-visit summaries remain outside the implemented backend contract.
+
+The notes below document the previous checkpoint and its original missing contracts. They do not describe current reviewed-analysis availability.
+
+---
+
 # AI integration agreement
 
 Checked-in public FastAPI schemas/routes confirm formats, not live inference or clinical accuracy. Python is unchanged. Adapters are verified synthetically; the actual reachable origin and matching key must be supplied privately. No example address is assumed to be a live deployment.

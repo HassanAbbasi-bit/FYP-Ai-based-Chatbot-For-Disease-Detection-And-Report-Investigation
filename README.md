@@ -1,3 +1,13 @@
+# Blood CP — AI report investigation
+
+A private Blood CP / CBC workspace connecting Friend 2's React/Express application with Friend 1's FastAPI/Ollama backend. Upload a report image or PDF, extract and review its entries, request an educational interpretation and ask questions about the saved reviewed revision.
+
+**Start here:** [integration setup, available features and limitations](docs/blood-cp-integration.md). Run `node scripts/configure-local-ai.cjs` to configure matching private local service keys without altering database credentials, then use `start_project.bat`. A running Ollama model and Tesseract are required for live model interpretation and image OCR respectively.
+
+Existing account data, report originals and environment credentials remain private. Automated tests use disposable databases and synthetic data. The application does not certify diagnoses or model accuracy.
+
+---
+
 # FYP Health Workspace
 
 React/Express app with MongoDB accounts/sessions, persistent conversations, private validated uploads, extraction jobs and versioned user review. Remaining application checkpoints add optional profile/consent, configured chat/symptom adapters, dedicated synthetic revision-bound results/report conversations, filtered history/comparison selection, factual PDF export, feedback, privacy/deletion and an actual-count dashboard. The friend's `ai-backend/` is unchanged.

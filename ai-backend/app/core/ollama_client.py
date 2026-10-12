@@ -47,14 +47,15 @@ class OllamaClient:
         model: str = settings.DEFAULT_MODEL,
         temperature: float = 0.2,
         max_tokens: Optional[int] = 450,
-        json_mode: bool = False
+        json_mode: bool = False,
+        context_tokens: Optional[int] = None
     ) -> str:
         """
         Calls Ollama generate endpoint with hardware-optimized inference options.
         """
         options: Dict[str, Any] = {
             "temperature": temperature,
-            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
             "top_p": 0.9,
             "top_k": 40
@@ -80,7 +81,7 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("response", "")
             else:
-                return f"Error from Ollama (status {res.status_code}): {res.text}"
+                raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."
@@ -95,14 +96,15 @@ class OllamaClient:
         messages: List[Dict[str, str]],
         model: str = settings.DEFAULT_MODEL,
         temperature: float = 0.2,
-        max_tokens: Optional[int] = 350
+        max_tokens: Optional[int] = 350,
+        context_tokens: Optional[int] = None
     ) -> str:
         """
         Calls Ollama chat endpoint with persistent memory and token limiting.
         """
         options: Dict[str, Any] = {
             "temperature": temperature,
-            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
             "top_p": 0.9,
             "top_k": 40
@@ -123,7 +125,7 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("message", {}).get("content", "")
             else:
-                return f"Error from Ollama (status {res.status_code}): {res.text}"
+                raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."

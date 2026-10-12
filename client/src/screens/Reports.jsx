@@ -90,7 +90,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     try {
       const data = await reportsApi.upload(file, uploadId.current, c.signal);
       if (!alive.current || c.signal.aborted) return;
-      setNotice("Uploaded — analysis is not connected yet.");
+      setNotice("Uploaded — ready for extraction and review.");
       setFile(null); uploadId.current = null; if (input.current) input.current.value = "";
       await load(); await open(data.report.id);
     } catch (err) {
@@ -121,8 +121,8 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     finally { requests.current.delete(c); busy.current = false; if (alive.current) setUploading(false); }
   }
   return <section className="chat-panel history-panel" aria-labelledby="reports-title">
-    <h1 id="reports-title">Private report library</h1>
-    <p className="intro">Files are saved privately to your account. Uploading does not extract values or provide medical analysis. File checks are not malware scanning.</p>
+    <h1 id="reports-title">Blood CP reports</h1>
+    <p className="intro">Upload a Blood CP / CBC image or PDF. Extract the entries, check them against the original, then request an AI interpretation or ask questions about your saved report.</p>
     <button className="secondary" disabled={uploading || loggingOut} onClick={createSample}>Create synthetic review sample</button>
     <p className="hint">The synthetic sample requires demo mode to be enabled on this server. Its values are available only for this dedicated sample.</p>
     <form onSubmit={upload} className="report-upload">
@@ -140,9 +140,9 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
         <div className="thread-heading"><h2>Saved reports</h2><button className="secondary" onClick={() => load()} disabled={loading || uploading || deleting || loggingOut}>Refresh reports</button></div>
         {loading && <p role="status">Loading reports...</p>}
         {error && <div className="error" role="alert"><p>{error}</p><button className="secondary" onClick={() => load()} disabled={loading}>Retry report list</button></div>}
-        {!loading && !rows.length && !error && <p className="empty">No reports yet. Upload a synthetic test file to begin.</p>}
+        {!loading && !rows.length && !error && <p className="empty">No reports yet. Upload your first Blood CP image or PDF to begin.</p>}
         <ul className="report-list">{rows.map((report) => <li key={report.id}><button className={`history-item ${selected?.id === report.id ? "selected" : ""}`} aria-current={selected?.id === report.id ? "true" : undefined} onClick={() => open(report.id)} disabled={deleting || loggingOut}>
-          <span>{report.displayName}</span><small>{report.fileType || "Validation incomplete"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleDateString()}</small><small>{report.status === "uploaded" ? "Uploaded — analysis is not connected yet." : report.status === "deleting" ? "Deletion pending" : "Upload incomplete"}</small>
+          <span>{report.displayName}</span><small>{report.fileType || "Validation incomplete"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleDateString()}</small><small>{report.status === "uploaded" ? "Uploaded — ready for extraction and review." : report.status === "deleting" ? "Deletion pending" : "Upload incomplete"}</small>
         </button><label><input type="checkbox" checked={comparisonIds.includes(report.id)} disabled={!comparisonIds.includes(report.id)&&comparisonIds.length>=3} onChange={e=>setComparisonIds(old=>e.target.checked?[...old,report.id]:old.filter(id=>id!==report.id))}/>Select {report.displayName} for comparison</label></li>)}</ul>
         {cursor && <button className="secondary" onClick={() => load(cursor)} disabled={loading || deleting || loggingOut}>Load more reports</button>}
       </section>

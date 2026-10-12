@@ -48,7 +48,7 @@ export default function ExtractionReview({ report, onExpired, onDirtyChange }) {
   const originals = new Map((data?.result?.originalRows || []).map((row) => [row.id, row]));
   return <section className="extraction-review" aria-labelledby="review-title">
     <h3 id="review-title">Extraction and value review</h3>
-    <p>User review means checked by you, not clinically validated. Analysis is not connected.</p>
+    <p>Check each extracted entry against your original. Mark the revision reviewed to unlock interpretation and report chat. User review is not clinical validation.</p>
     {!data && !error && <p role="status">Loading extraction status...</p>}
     {data && !data.available && <p className="demo-banner">Extraction service not connected.</p>}
     {(data?.available === "synthetic-demo" || data?.result?.origin === "synthetic-demo") && <p className="demo-banner">Demo extraction — synthetic sample. These fixture values match only this dedicated sample and are not medical results.</p>}

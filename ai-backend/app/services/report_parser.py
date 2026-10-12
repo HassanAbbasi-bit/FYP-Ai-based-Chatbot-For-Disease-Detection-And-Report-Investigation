@@ -173,7 +173,7 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
             t_val = match.group(2)
             t_unit = match.group(3)
             t_range = match.group(4)
-            if len(t_name) > 2 and not any(kw in t_name.lower() for kw in ignored_keywords) and not t_name.endswith("-"):
+            if len(t_name) > 2 and not any(re.search(r'\b' + re.escape(kw) + r'\b', t_name.lower()) for kw in ignored_keywords) and not t_name.endswith("-"):
                 table_items.append({
                     "name": t_name,
                     "value": t_val,
@@ -188,6 +188,7 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
         if date_match:
             report_date = date_match.group(1)
     else:
+        extracted_items = table_items  # Preserve parsed rows when the model is offline.
         # 2. Secondary Strategy: Ollama LLM Structured Extraction for complex/unstructured formats
         try:
             health = await ollama_client.check_health()

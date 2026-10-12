@@ -98,3 +98,81 @@ select { max-width:100%; padding:.65rem; border:1px solid #b9ccd6; border-radius
 label:has(> input[type="checkbox"]) { display:flex; align-items:flex-start; gap:.5rem; }
 input[type="checkbox"] { width:auto; flex:none; margin-top:.2rem; }
 .table-scroll:focus-visible { outline:3px solid #126b78; outline-offset:3px; }
+/* Blood CP visual identity */
+body { background:#f8f7f5; color:#26352f; font-family:Inter,'Segoe UI',Arial,sans-serif; }
+.page { padding:0; }
+.workspace-shell { display:grid; grid-template-columns:235px minmax(0,1fr); min-height:100vh; }
+.workspace-rail { background:#fff; border-right:1px solid #e4e7e2; padding:32px 20px; display:flex; flex-direction:column; }
+.brand { display:flex; align-items:center; gap:11px; font-size:23px; font-weight:800; color:#263d33; letter-spacing:-.6px; }
+.brand span:not(.brand-mark) { display:block; font-size:9px; letter-spacing:1.5px; margin-top:5px; color:#768378; }
+.brand-mark { background:#a9394a; color:#fff; border-radius:14px 14px 14px 4px; width:43px; height:43px; display:grid; place-items:center; font-size:28px; }
+.workspace-nav { display:flex; flex-direction:column; gap:8px; width:100%; margin:42px 0 20px; }
+.workspace-nav button { text-align:left; background:transparent; color:#69786c; border-radius:9px; padding:13px 16px; }
+.workspace-nav button[aria-current='page'] { background:#eaf0e9; color:#294a36; border-left:3px solid #456b50; }
+.workspace-nav button:hover { background:#f2f5ef; }
+.rail-note { margin-top:auto; background:#f4f5ee; padding:20px 15px; border-radius:14px; font-size:13px; line-height:1.7; color:#667463; }
+.rail-note>span { display:block; font-size:26px; color:#456b50; }
+.rail-note strong { color:#3c5141; display:block; }
+.workspace-main { padding:0 40px; min-width:0; }
+.workspace-topbar { display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px solid #e2e6df; padding:23px 0; margin-bottom:32px; font-size:10px; font-weight:700; letter-spacing:1.5px; color:#778476; }
+.profile-chip { background:#e9ede4; border-radius:24px; padding:10px 17px; color:#415444; letter-spacing:0; font-size:13px; overflow-wrap:anywhere; }
+.workspace-footer { font-size:12px; line-height:1.7; color:#798277; padding:30px 0; }
+.dashboard { max-width:1320px; margin:auto; }
+.dashboard-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; }
+h1 { font-weight:650; letter-spacing:-1px; font-size:32px; margin:8px 0 12px; }
+h2 { font-weight:650; letter-spacing:-.4px; }
+.eyebrow { color:#7d8977; font-size:10px; letter-spacing:1.8px; }
+.intro { color:#72806f; }
+button { background:#345943; border-radius:9px; font-size:13px; padding:12px 18px; transition:background .15s; }
+button:hover { background:#244731; }
+.secondary { background:#eef1e9; color:#3c5440; }
+.secondary:hover { background:#e2e8db; }
+.danger { background:#a23e49; }
+.blood-hero { background:#e9edde; display:grid; grid-template-columns:1.3fr 1fr; border:1px solid #dfe5d4; border-radius:22px; padding:38px 42px; margin:22px 0; position:relative; overflow:hidden; }
+.hero-tag { display:inline-block; border:1px solid #c8d2bb; border-radius:24px; padding:7px 12px; font-size:9px; font-weight:700; letter-spacing:1.5px; color:#627653; }
+.blood-hero h2 { font-size:clamp(30px,3.8vw,49px); line-height:1.15; margin:22px 0 16px; font-weight:600; color:#314c36; letter-spacing:-1.9px; }
+.blood-hero p { max-width:460px; font-size:14px; color:#68765f; line-height:1.8; margin-bottom:25px; }
+.blood-hero button { padding:14px 20px; }
+.blood-hero button span { padding-left:24px; font-size:18px; }
+.blood-art { position:relative; min-height:280px; }
+.orbit { position:absolute; width:265px; height:265px; border:1px solid #d2dac6; border-radius:50%; top:10px; left:50%; transform:translateX(-50%); }
+.orbit-two { width:330px; height:330px; top:-22px; }
+.cell { position:absolute; display:block; border-radius:50%; background:radial-gradient(ellipse at 50% 48%,#7b1f33 0%,#bb4355 29%,#ec8c92 49%,#c65363 67%,#963446 100%); box-shadow:inset 0 0 16px #68213955, 0 15px 25px #6d3b4420; }
+.cell-one { width:135px; height:100px; top:30px; left:22%; transform:rotate(-28deg); }
+.cell-two { width:94px; height:76px; top:147px; left:10%; transform:rotate(24deg); }
+.cell-three { width:116px; height:94px; top:134px; right:10%; transform:rotate(-38deg); }
+.cell-four { width:55px; height:43px; top:40px; right:10%; transform:rotate(12deg); }
+.art-label { position:absolute; left:31%; bottom:3px; font-size:11px; letter-spacing:2px; color:#657459; font-weight:700; }
+.art-label span { display:block; font-size:10px; letter-spacing:0; margin-top:6px; font-weight:400; }
+.stat-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin:24px 0; }
+.stat-grid>div { background:#fff; border:1px solid #e1e5dd; padding:24px; border-radius:15px; }
+.stat-grid dt { color:#75816f; font-size:12px; }
+.stat-grid dd { margin:12px 0 0; font-size:32px; color:#344d3a; font-weight:650; }
+.stat-grid dd span { display:block; font-size:11px; font-weight:400; color:#899080; margin-top:9px; }
+.dashboard-grid { display:grid; grid-template-columns:1.1fr 1fr; gap:20px; }
+.workflow-card { padding:25px; border:1px solid #e1e5dd; border-radius:16px; background:white; }
+.workflow-card h2 { font-size:21px; margin:10px 0 22px; }
+.workflow-steps { list-style:none; padding:0; margin:0; }
+.workflow-steps li { display:flex; gap:15px; margin:22px 0; font-size:13px; }
+.workflow-steps li>span { width:36px; height:36px; background:#f0f3e9; display:grid; place-items:center; border-radius:10px; color:#7d8a69; flex-shrink:0; font-size:11px; }
+.workflow-steps p { color:#7f897a; line-height:1.7; margin:7px 0; font-size:12px; }
+.service-list { list-style:none; padding:0; font-size:12px; }
+.service-list li { display:flex; justify-content:space-between; gap:15px; padding:12px 0; border-bottom:1px solid #eef0e9; color:#7c8577; }
+.service-list strong { color:#476148; text-align:right; }
+.chat-panel { max-width:1320px; border-color:#e1e5dd; border-radius:18px; }
+.auth-panel { max-width:480px; margin:6vh auto; padding:36px; }
+.auth-brand { margin-bottom:32px; }
+.demo-banner { background:#f0f3e7; color:#526446; font-weight:500; font-size:13px; line-height:1.7; }
+.hint { color:#798574; }
+.conversation { background:#f7f8f3; }
+.bubble.user { background:#e9efdf; border-color:#d9e1cd; }
+.history-item.selected { border-color:#577548; background:#eff3e7; }
+input,textarea,select { border-color:#ccd6c5; color:#344d3a; background:#fff; }
+input:focus-visible,textarea:focus-visible,button:focus-visible { outline-color:#789965; }
+.report-upload { background:#f7f8f1; border:1px dashed #b7c5a7; padding:25px; }
+.report-results article { background:#fafbf6; border:1px solid #e0e5d7; border-radius:12px; padding:20px; margin:20px 0; }
+.flag-high,.flag-low { color:#a5414c; font-weight:700; }.flag-normal { color:#39724b; }.flag-inconclusive { color:#787867; }
+.finding-card { border-left:3px solid #9bab85; padding:4px 16px; margin:20px 0; }
+.finding-card p { line-height:1.7; color:#657460; }
+@media(max-width:1100px) { .workspace-shell { grid-template-columns:190px minmax(0,1fr); }.workspace-main { padding:0 24px; }.workspace-rail { padding:28px 14px; }.brand { font-size:20px; }.blood-hero { padding:28px; }.dashboard-grid { grid-template-columns:1fr; } }
+@media(max-width:760px) { .workspace-shell { display:block; }.workspace-rail { padding:15px 20px; border-right:0; border-bottom:1px solid #e4e7e2; }.workspace-nav { flex-direction:row; flex-wrap:wrap; margin:20px 0 0; gap:5px; }.workspace-nav button { padding:10px 12px; }.rail-note { display:none; }.workspace-main { padding:0 16px; }.workspace-topbar { margin-bottom:20px; }.blood-hero { grid-template-columns:1fr; padding:25px; }.blood-art { min-height:210px; margin-top:25px; }.orbit { width:210px;height:210px; }.orbit-two { width:260px;height:260px; }.cell-one { top:8px;left:30%;width:100px;height:80px; }.cell-two { top:100px;width:70px;height:55px; }.cell-three { top:92px;width:90px;height:73px; }.stat-grid { gap:8px; }.stat-grid>div { padding:15px 11px; }.stat-grid dd { font-size:27px; }.stat-grid dt { font-size:10px; }.stat-grid dd span { font-size:9px; }.dashboard-heading { align-items:flex-start; }.dashboard-heading>button { padding:10px; }.auth-panel { margin:20px 16px; padding:25px; } }

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.api.routes import health, chat, symptoms, reports
+from app.api.routes import health, chat, symptoms, reports, reviewed
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(symptoms.router, prefix="/api")
+app.include_router(reviewed.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 
 @app.get("/")

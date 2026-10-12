@@ -7,6 +7,11 @@ function accountRoutes({ connection, config, reports }) {
   const router = express.Router(), User = connection.models.User;
   router.use(limiter(60, 60000, (req) => String(req.user._id)));
   router.use((req, res, next) => ["GET", "HEAD"].includes(req.method) ? next() : csrfSynchronisedProtection(req, res, next));
+  router.get('/ai-status', async (req,res)=>{
+    const configured=config.chatProvider==='fastapi'||config.extractionProvider==='fastapi';
+    if(!configured)return res.json({configured:false,reachable:false,modelReady:false,ocrReady:false});
+    try{const signal=AbortSignal.timeout(8000);const response=await fetch(`${config.aiServiceUrl}/api/health`,{signal,redirect:'error',headers:{'X-Internal-Key':config.aiInternalKey}});if(!response.ok)throw new Error();const d=await require('../services/extraction-adapters').limitedJson(response,signal,16384);res.json({configured:true,reachable:true,modelReady:d.ollama_connected===true&&Array.isArray(d.available_models)&&d.available_models.includes(d.active_model),ocrReady:d.ocr_available===true,model:typeof d.active_model==='string'?d.active_model.slice(0,120):null});}catch{res.json({configured:true,reachable:false,modelReady:false,ocrReady:false});}
+  });
   router.get("/", (req, res) => res.json({ name: req.user.name, healthContext: req.user.healthContext, consent: req.user.consent, version: req.user.privacyVersion,
     capabilities: { chat: config.chatProvider === "fastapi" ? "configured-fastapi" : config.chatProvider==='off'?'unavailable':'demo', symptoms: config.chatProvider === "fastapi", extractionDemo: config.extractionDemoEnabled }, noticeVersion: NOTICE_VERSION }));
   router.put("/", async (req, res) => {

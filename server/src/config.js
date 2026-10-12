@@ -42,6 +42,6 @@ function readConfig(env = process.env) {
   return { mongoUri: env.MONGODB_URI, sessionSecret: env.SESSION_SECRET, origin, production, trustProxy: env.TRUST_PROXY === "loopback" ? "loopback" : false, port, host: "127.0.0.1", sessionTtlMs: SESSION_TTL_MS, cookieName: production ? "__Host-fyp.sid" : "fyp.sid",
     reportStorageDir, reportMaxBytes, reportMaxTotalBytes, reportMaxCount: bounded("REPORT_MAX_COUNT", 20, 1000), reportMaxPixels: bounded("REPORT_MAX_PIXELS", 20_000_000, 40_000_000),
     exportFontPath: env.EXPORT_FONT_PATH || (process.platform === 'win32' ? 'C:\\Windows\\Fonts\\arial.ttf' : '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
-    extractionProvider, chatProvider, extractionDemoEnabled, aiServiceUrl, aiInternalKey: env.AI_INTERNAL_KEY, extractionTimeoutMs: bounded("EXTRACTION_TIMEOUT_MS", 45000, 60000) };
+    extractionProvider, chatProvider, extractionDemoEnabled, aiServiceUrl, aiInternalKey: env.AI_INTERNAL_KEY, extractionTimeoutMs: bounded("EXTRACTION_TIMEOUT_MS", 125000, 130000) };
 }
 module.exports = { readConfig, SESSION_TTL_MS };
