@@ -41,7 +41,7 @@ Tests use disposable MongoDB databases, synthetic reports/accounts and local stu
 
 - All 113 server tests, 22 FastAPI tests and 14 frontend tests passed; frontend lint and production build passed.
 - The original llama3.2:3b model is installed. Actual model chat, symptom assessment, image OCR, correction, saved reviewed-report interpretation and report-specific conversation have passed live checks using synthetic data.
-- Atlas connected and Express readiness passed earlier after the current IP was added to Network Access. At the final restart, all three members again rejected TLS handshakes (ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR). Current access-list/cluster availability requires rechecking in Atlas. Existing database credentials were preserved; live AI checks use a disposable database.
+- Atlas connection and ping passed after the current-IP access entry was refreshed. The normal Express application started successfully; Express readiness, frontend and FastAPI health returned HTTP 200. The frontend session proxy returned the expected HTTP 401 without a signed-in session. Existing database credentials were preserved; live AI workflow checks used a disposable database.
 - During local inference, the disposable test database briefly returned 503. Status reads recover without resubmitting inference; the interface clears a recovered status-read error while retaining action errors.
 - Live Chrome checks passed: real image OCR, corrected reviewed findings, doctor questions, report conversation containing 13.0, symptoms, mobile overflow and recovery from a simulated status outage; zero page errors.
 - These results supersede the earlier model-download and Atlas network failures. Tests verify software behavior, not clinical accuracy.
