@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { extractionApi } from "../api/extractions";
 
-export default function ExtractionReview({ report, onExpired, onDirtyChange }) {
+export default function ExtractionReview({ report, onExpired, onDirtyChange, onReviewed }) {
   const [data, setData] = useState(null), [rows, setRows] = useState([]), [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const alive = useRef(true), controllers = useRef(new Set()), requestId = useRef(null), dirtyRef = useRef(false), callbacks = useRef({ onExpired, onDirtyChange });
@@ -34,7 +34,7 @@ export default function ExtractionReview({ report, onExpired, onDirtyChange }) {
   async function action(work, message) {
     if (busy) return;
     const c = new AbortController(); controllers.current.add(c); setBusy(true); setError(""); setNotice("");
-    try { await work(c.signal); if (alive.current && !c.signal.aborted) { changeDirty(false); await reload(true); setNotice(message); } }
+    try { await work(c.signal); if (alive.current && !c.signal.aborted) { changeDirty(false); await reload(true); setNotice(message); return true; } }
     catch (err) { if (alive.current && err.name !== "AbortError") { if (err.status === 401) callbacks.current.onExpired(); else setError(err.message); } }
     finally { controllers.current.delete(c); if (alive.current) setBusy(false); }
   }
@@ -69,7 +69,7 @@ export default function ExtractionReview({ report, onExpired, onDirtyChange }) {
         const changed = original && ["testName", "rawValue", "units", "referenceRange", "reportDate", "sourcePage", "unknown", "unreadable"].some((key) => row[key] !== original[key]);
         return <fieldset key={row.id} className={`review-row ${row.removed ? "removed-row" : ""}`} disabled={busy}>
           <legend>Row {index + 1} · {original ? changed ? "User-corrected" : "Extracted" : "User-entered"}{row.removed ? " · Removed from reviewed result" : ""}</legend>
-          {original && <p className="original-value">Original: {original.testName} · value: {original.rawValue ?? "Unknown"} · units: {original.units ?? "Missing"} · reported range: {original.referenceRange ?? "Missing"} · date: {original.reportDate ?? "Missing"} · page: {original.sourcePage ?? "Unknown"}</p>}
+          {original && <details className="original-value"><summary>View original extracted entry</summary><p>{original.testName} · value: {original.rawValue ?? "Unknown"} · units: {original.units ?? "Missing"} · reported range: {original.referenceRange ?? "Missing"} · date: {original.reportDate ?? "Missing"} · page: {original.sourcePage ?? "Unknown"}</p></details>}
           {(row.uncertain || row.unknown || row.unreadable || !row.units) && <p className="hint">Needs your review: {row.reviewReason || "Uncertain, unreadable, unknown, or missing units."}</p>}
           <div className="review-fields">
             <label>Test name<input aria-label={`Test name row ${index + 1}`} value={row.testName} maxLength={160} disabled={row.removed} onChange={(e) => edit(row.id, "testName", e.target.value)} /></label>
@@ -87,7 +87,7 @@ export default function ExtractionReview({ report, onExpired, onDirtyChange }) {
       })}
       <button className="secondary" disabled={busy || active || rows.length >= 100} onClick={() => { setRows((old) => [...old, { id: crypto.randomUUID(), testName: "", rawValue: null, units: null, referenceRange: null, reportDate: null, sourcePage: null, unknown: true, unreadable: false, removed: false, provenance: "user-entered" }]); changeDirty(true); }}>Add missed row</button>
       <button disabled={busy || !dirty} onClick={() => action((signal) => extractionApi.save(report.id, { resultId: data.result.id, expectedVersion: data.review.version, rows, markReviewed: false }, signal), "Draft saved.")}>Save draft</button>
-      <button disabled={busy || active} onClick={() => action((signal) => extractionApi.save(report.id, { resultId: data.result.id, expectedVersion: data.review.version, rows, markReviewed: true }, signal), "Revision reviewed by you. This is not medical approval.")}>Mark reviewed</button>
+      <button disabled={busy || active} onClick={async () => { if(await action((signal) => extractionApi.save(report.id, { resultId: data.result.id, expectedVersion: data.review.version, rows, markReviewed: true }, signal), "Revision reviewed by you. This is not medical approval."))onReviewed?.(); }}>Mark reviewed</button>
     </>}
   </section>;
 }

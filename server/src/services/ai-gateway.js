@@ -46,7 +46,14 @@ function aiGateway({ config, connection }) {
     if (data.report_id !== String(reportId) || data.review_version !== review.version || data.origin !== 'ollama' || !Array.isArray(data.findings) || data.findings.length > 100 || !Array.isArray(data.flags) || data.flags.length !== rows.length) throw new ReportError(502,'INVALID_AI_RESPONSE','The AI returned a mismatched report revision or invalid findings.');
     const flags = new Map();
     for (const f of data.flags) { if (!rows.some(r=>r.id===f.id) || flags.has(f.id) || !['low','high','normal','inconclusive'].includes(f.flag)) throw new ReportError(502,'INVALID_AI_RESPONSE','Invalid report flags.'); flags.set(f.id,f.flag); }
-    return { modelVersion: data.model_version==null?null:text(data.model_version,120), summary: text(data.summary,4000), rows: rows.map(r=>({...r,flag:flags.get(r.id)})), findings: data.findings.map(f=>({testName:text(f.test_name,200),finding:text(f.finding,1000),explanation:text(f.plain_language_explanation,4000)})), questions: strings(data.doctor_discussion_questions), sources: [], escalation: null, limitations: [text(data.disclaimer,1000),'Model-generated explanations have not been clinically validated. Reference comparisons use your saved ranges. No verified retrieval sources were supplied.'] };
+    const conditions = data.possible_conditions ?? [];
+    if (!Array.isArray(conditions) || conditions.length > 3) throw new ReportError(502,'INVALID_AI_RESPONSE','Invalid possible conditions.');
+    const possibleConditions = conditions.map(c => {
+      const supportingTests = strings(c.supporting_tests, 10);
+      if (!supportingTests.length || supportingTests.some(name => !rows.some(r => r.testName === name && !r.unknown && !r.unreadable && ['low','high'].includes(flags.get(r.id))))) throw new ReportError(502,'INVALID_AI_RESPONSE','Condition evidence does not match abnormal reviewed values.');
+      return { condition: text(c.condition,200), rationale: text(c.rationale,1000), supportingTests, uncertainty: text(c.uncertainty,500), followUp: text(c.follow_up,500) };
+    });
+    return { possibleConditions, modelVersion: data.model_version==null?null:text(data.model_version,120), summary: text(data.summary,4000), rows: rows.map(r=>({...r,flag:flags.get(r.id)})), findings: data.findings.map(f=>({testName:text(f.test_name,200),finding:text(f.finding,1000),explanation:text(f.plain_language_explanation,4000)})), questions: strings(data.doctor_discussion_questions), sources: [], escalation: null, limitations: [text(data.disclaimer,1000),'Model-generated explanations have not been clinically validated. Reference comparisons use your saved ranges. No verified retrieval sources were supplied.'] };
   }
   return { chat, symptoms, explain };
 }

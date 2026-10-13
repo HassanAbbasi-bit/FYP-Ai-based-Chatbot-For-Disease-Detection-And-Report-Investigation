@@ -41,7 +41,7 @@ class SymptomAssessmentRequest(BaseModel):
     user_id: Optional[str] = None
     symptoms: List[str]
     duration: Optional[str] = "unknown"
-    severity: Optional[str] = "moderate"
+    severity: Optional[str] = None
     additional_notes: Optional[str] = None
 
 class PossibleCause(BaseModel):
