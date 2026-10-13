@@ -76,3 +76,51 @@ def test_model_timeout_has_its_own_error_code(monkeypatch):
     r=client.post('/api/reports/reviewed/explain',headers=headers,json=payload)
     assert r.status_code==504
     assert r.json()['detail']['code']=='MODEL_TIMEOUT'
+
+def test_condition_suggestions_are_grounded_in_abnormal_reviewed_tests(monkeypatch):
+    seen = {}
+    async def generate(**kwargs):
+        seen.update(kwargs)
+        return json.dumps(dict(summary='Fixture', findings=[], doctor_discussion_questions=['Fixture question'], possible_conditions=[dict(condition='Synthetic pattern', rationale='Fixture low value', supporting_tests=['Synthetic measurement'], uncertainty='Further assessment needed', follow_up='Discuss confirmation with a physician')]))
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    abnormal = dict(payload, rows=[dict(row, rawValue='8')])
+    r = client.post('/api/reports/reviewed/explain',headers=headers,json=abnormal)
+    assert r.status_code == 200
+    assert r.json()['possible_conditions'][0]['supporting_tests'] == ['Synthetic measurement']
+    assert 'physician confirmation' in seen['system_prompt']
+    # A normal or unknown measurement cannot support the same suggestion.
+    assert client.post('/api/reports/reviewed/explain',headers=headers,json=payload).status_code == 502
+    unknown = dict(payload, rows=[dict(row, rawValue=None, unknown=True)])
+    assert client.post('/api/reports/reviewed/explain',headers=headers,json=unknown).status_code == 502
+
+def test_normal_report_requests_no_disease_suggestions_and_does_not_claim_health(monkeypatch):
+    seen = {}
+    async def generate(**kwargs):
+        seen.update(kwargs)
+        return json.dumps(dict(summary='Fixture', findings=[], doctor_discussion_questions=[], possible_conditions=[]))
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    r = client.post('/api/reports/reviewed/explain',headers=headers,json=payload)
+    assert r.status_code == 200
+    assert r.json()['possible_conditions'] == []
+    assert seen['response_schema']['properties']['possible_conditions']['maxItems'] == 0
+
+def test_symptoms_keep_missing_severity_unknown_and_reject_definitive_model_classification(monkeypatch):
+    seen = {}
+    async def health(): return {'connected':True}
+    async def generate(**kwargs):
+        seen.update(kwargs)
+        return json.dumps(dict(possible_causes=[dict(condition='Fixture',likelihood='confirmed',rationale='Fixture')],recommended_questions_for_doctor=['Fixture'],self_care_notes='Fixture'))
+    monkeypatch.setattr(ollama_client,'check_health',health)
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    r = client.post('/api/symptoms/assess',headers=headers,json={'symptoms':['synthetic concern']})
+    assert r.status_code == 502
+    assert 'Severity: unspecified' in seen['prompt']
+    assert seen['response_schema']['$defs']['SymptomCause']['properties']['likelihood']['const'] == 'possible'
+
+def test_emergency_in_symptom_notes_bypasses_model(monkeypatch):
+    async def generate(**kwargs): raise AssertionError('Emergency must not wait for inference')
+    monkeypatch.setattr(ollama_client,'generate_response',generate)
+    r = client.post('/api/symptoms/assess',headers=headers,json={'symptoms':['fatigue'],'additional_notes':'severe chest pain'})
+    assert r.status_code == 200
+    assert r.json()['is_red_flag'] is True
+    assert r.json()['origin'] == 'rules'

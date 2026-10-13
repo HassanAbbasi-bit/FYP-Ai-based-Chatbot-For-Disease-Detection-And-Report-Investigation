@@ -3,6 +3,7 @@ import { api, clearCsrf } from "./api/client";
 import AuthScreen from "./screens/AuthScreen";
 import Workspace from "./screens/Workspace";
 import "./App.css";
+import "./premium.css";
 
 export default function App() {
   const [user, setUser] = useState(null);

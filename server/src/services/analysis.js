@@ -65,7 +65,7 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
         current.output = providerOutput || { rows: review.rows.filter(r => !r.removed).map(r => ({ id: r.id, testName: r.testName, rawValue: r.rawValue, units: r.units, referenceRange: r.referenceRange, reportDate: r.reportDate, unknown: r.unknown, unreadable: r.unreadable, flag: null, explanation: 'Synthetic workflow demonstration: this row copies the saved review. No medical interpretation or range flag was generated.' })),
           sources: [], questions: ['Are these reviewed entries complete and accurate?'], escalation: null,
           limitations: ['DEMO — dedicated synthetic sample only.', 'User-reviewed means checked by the account owner, not clinical validation.', 'No AI model, medical interpretation, diagnosis, approved range flags or source retrieval is connected. Missing values remain unknown.'] };
-        current.modelVersion=providerOutput?.modelVersion||null; current.promptVersion=providerOutput?'reviewed-blood-cp-v1':null; current.state = 'succeeded'; current.completedAt = new Date(); current.leaseToken = null; current.leaseUntil = null; await current.save({ session });
+        current.modelVersion=providerOutput?.modelVersion||null; current.promptVersion=providerOutput?'reviewed-blood-cp-v2':null; current.state = 'succeeded'; current.completedAt = new Date(); current.leaseToken = null; current.leaseUntil = null; await current.save({ session });
       });
     } catch (e) { await Analysis.updateOne({ _id: job._id, state: 'running', leaseToken: job.leaseToken }, { $set: { state: 'failed', completedAt: new Date(), errorCode: e instanceof ReportError ? e.code : 'PROCESSING_FAILED', leaseToken: null, leaseUntil: null } }).catch(() => {}); }
   }

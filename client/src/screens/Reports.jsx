@@ -19,6 +19,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState(null);
   const [opening, setOpening] = useState(false);
+  const [uploadExpanded,setUploadExpanded]=useState(true);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -72,13 +73,13 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     setSelected(null); setOpening(true); setError("");
     try {
       const data = await reportsApi.detail(id, c.signal);
-      if (alive.current && !c.signal.aborted) setSelected(data.report);
+      if (alive.current && !c.signal.aborted) {setSelected(data.report);setUploadExpanded(false);}
     } catch (err) { if (!failure(err) && !c.signal.aborted) setError(err.message); }
     finally { requests.current.delete(c); if (alive.current && !c.signal.aborted) setOpening(false); }
   }
   function choose(event) {
     const next = event.target.files?.[0] || null;
-    setFile(next); uploadId.current = next ? crypto.randomUUID() : null;
+    setFile(next);setUploadExpanded(true); uploadId.current = next ? crypto.randomUUID() : null;
     setUploadError(""); setNotice("");
   }
   async function upload(event) {
@@ -120,35 +121,36 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     catch (err) { if (!failure(err)) setUploadError(err.message); }
     finally { requests.current.delete(c); busy.current = false; if (alive.current) setUploading(false); }
   }
-  return <section className="chat-panel history-panel" aria-labelledby="reports-title">
-    <h1 id="reports-title">Blood CP reports</h1>
+  return <section className="chat-panel history-panel premium-reports" aria-labelledby="reports-title">
+    <p className="eyebrow">REPORTS &middot; FROM NUMBERS TO UNDERSTANDING</p><h1 id="reports-title">Your blood report, made clearer.</h1>
     <p className="intro">Upload a Blood CP / CBC image or PDF. Extract the entries, check them against the original, then request an AI interpretation or ask questions about your saved report.</p>
-    <button className="secondary" disabled={uploading || loggingOut} onClick={createSample}>Create synthetic review sample</button>
-    <p className="hint">The synthetic sample requires demo mode to be enabled on this server. Its values are available only for this dedicated sample.</p>
-    <form onSubmit={upload} className="report-upload">
-      <label htmlFor="report-file">Choose a report</label>
-      <input ref={input} id="report-file" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={choose} disabled={uploading || loggingOut} aria-describedby="report-upload-help" />
+    <details className="advanced-tools"><summary>Try a synthetic practice report</summary><button className="secondary" disabled={uploading || loggingOut} onClick={createSample}>Create synthetic review sample</button>
+    <p className="hint">The synthetic sample requires demo mode to be enabled on this server. Its values are available only for this dedicated sample.</p></details>
+    <details className="upload-panel" open={!selected||uploadExpanded} onToggle={e=>setUploadExpanded(e.currentTarget.open)}><summary>{selected?'Upload another report':'Upload your report'}</summary><form onSubmit={upload} className="report-upload">
+      <div className="upload-dropzone" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();if(!uploading&&!loggingOut)choose({target:{files:e.dataTransfer.files}});}}><span className="upload-glyph" aria-hidden="true">+</span><label htmlFor="report-file">Choose a report</label><p>Drop your document here, or click to browse</p>
+      <input ref={input} id="report-file" type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={choose} disabled={uploading || loggingOut} aria-describedby="report-upload-help" /></div>{file&&<p className="selected-file">Selected: <strong>{file.name}</strong> <span>{formatSize(file.size)}</span></p>}
       <p className="hint" id="report-upload-help">PDF, JPEG, PNG only. {limits ? `Maximum ${formatSize(limits.maxBytes)} per file; ${limits.maxCount} reports and ${formatSize(limits.maxTotalBytes)} per account.` : "Loading upload limits..."} Encrypted PDFs are not supported.</p>
       <button type="submit" disabled={!file || !limits || uploading || loggingOut}>{uploading ? "Uploading and validating..." : uploadError ? "Retry upload" : "Upload report"}</button>
       {uploading && <button type="button" className="secondary" onClick={() => uploadController.current?.abort()}>Cancel upload</button>}
       <p role="status">{uploading ? "Transferring the file, then validating it on the server. No analysis is performed." : notice}</p>
       {uploadError && <p className="error" role="alert">{uploadError}</p>}
-    </form>
+    </form></details>
     <div className="reports-layout">
-      <section aria-label="Saved reports">
-        <form onSubmit={e=>{e.preventDefault();filterRef.current=filters;load();}}><label>Search report names<input maxLength={120} value={filters.q} onChange={e=>setFilters({...filters,q:e.target.value})}/></label><label>Uploaded from (UTC)<input type="date" value={filters.from} onChange={e=>setFilters({...filters,from:e.target.value})}/></label><label>Uploaded through (UTC)<input type="date" value={filters.to} onChange={e=>setFilters({...filters,to:e.target.value})}/></label><label>Status<select value={filters.status} onChange={e=>setFilters({...filters,status:e.target.value})}><option value="">All</option><option value="uploaded">Uploaded</option><option value="uploading">Upload incomplete</option><option value="deleting">Deletion pending</option></select></label><button disabled={loading}>Apply filters</button><p className="hint">Filters use upload dates, not specimen/test dates.</p></form>
+      <section className="report-library" aria-label="Saved reports">
+        <form className="report-filters" onSubmit={e=>{e.preventDefault();filterRef.current=filters;load();}}><label>Search report names<input maxLength={120} value={filters.q} onChange={e=>setFilters({...filters,q:e.target.value})}/></label><details><summary>Date and status filters</summary><label>Uploaded from (UTC)<input type="date" value={filters.from} onChange={e=>setFilters({...filters,from:e.target.value})}/></label><label>Uploaded through (UTC)<input type="date" value={filters.to} onChange={e=>setFilters({...filters,to:e.target.value})}/></label><label>Status<select value={filters.status} onChange={e=>setFilters({...filters,status:e.target.value})}><option value="">All</option><option value="uploaded">Uploaded</option><option value="uploading">Upload incomplete</option><option value="deleting">Deletion pending</option></select></label></details><button disabled={loading}>Apply filters</button><p className="hint">Filters use upload dates, not specimen/test dates.</p></form>
         <div className="thread-heading"><h2>Saved reports</h2><button className="secondary" onClick={() => load()} disabled={loading || uploading || deleting || loggingOut}>Refresh reports</button></div>
         {loading && <p role="status">Loading reports...</p>}
         {error && <div className="error" role="alert"><p>{error}</p><button className="secondary" onClick={() => load()} disabled={loading}>Retry report list</button></div>}
         {!loading && !rows.length && !error && <p className="empty">No reports yet. Upload your first Blood CP image or PDF to begin.</p>}
         <ul className="report-list">{rows.map((report) => <li key={report.id}><button className={`history-item ${selected?.id === report.id ? "selected" : ""}`} aria-current={selected?.id === report.id ? "true" : undefined} onClick={() => open(report.id)} disabled={deleting || loggingOut}>
           <span>{report.displayName}</span><small>{report.fileType || "Validation incomplete"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleDateString()}</small><small>{report.status === "uploaded" ? "Uploaded — ready for extraction and review." : report.status === "deleting" ? "Deletion pending" : "Upload incomplete"}</small>
-        </button><label><input type="checkbox" checked={comparisonIds.includes(report.id)} disabled={!comparisonIds.includes(report.id)&&comparisonIds.length>=3} onChange={e=>setComparisonIds(old=>e.target.checked?[...old,report.id]:old.filter(id=>id!==report.id))}/>Select {report.displayName} for comparison</label></li>)}</ul>
+        </button><details className="comparison-selector"><summary>Comparison selection</summary><label><input type="checkbox" checked={comparisonIds.includes(report.id)} disabled={!comparisonIds.includes(report.id)&&comparisonIds.length>=3} onChange={e=>setComparisonIds(old=>e.target.checked?[...old,report.id]:old.filter(id=>id!==report.id))}/>Select {report.displayName} for comparison</label></details></li>)}</ul>
         {cursor && <button className="secondary" onClick={() => load(cursor)} disabled={loading || deleting || loggingOut}>Load more reports</button>}
       </section>
       <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDirtyChange={dirtyChanged} onOpenChat={context=>{if(guard())onOpenChat?.(context);}} onDelete={() => { if (guard()) { setDeleteError(""); setConfirming(true); } }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
     </div>
-    <section aria-label="Report comparison"><h2>Comparison selection</h2><p>{comparisonIds.length} selected (up to 3). Real comparison needs confirmed measurement identity, units, dates and range matching from the AI service. Selected uploads are not analyzed or matched by names.</p>{comparisonIds.length>0&&<button className="secondary" onClick={()=>setComparisonIds([])}>Clear selection</button>}<button className="secondary" onClick={async()=>{const c=controller();try{const result=await api('/reports/comparison-demo',{signal:c.signal});if(alive.current&&!c.signal.aborted)setDemo(result);}catch(e){if(!failure(e))setError(e.message);}finally{requests.current.delete(c);}}}>Show dedicated synthetic comparison</button>{demo&&<><p className="demo-banner">DEMO — {demo.limitations}</p><div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable report table"><table><caption>Dedicated synthetic comparison; selected reports are not used</caption><thead><tr><th scope="col">Case</th><th scope="col">2026-01-01</th><th scope="col">2026-02-01</th><th scope="col">Compatibility</th></tr></thead><tbody>{demo.rows.map(r=><tr key={r.name}><th scope="row">{r.name}</th><td>{r.a.value??'Missing'} {r.a.unit}</td><td>{r.b.value??'Missing'} {r.b.unit}</td><td>{r.compatible?'Compatible':'Incompatible'}: {r.reason}</td></tr>)}</tbody></table></div></>}</section>
+    <details className="advanced-tools"><summary>Advanced: synthetic comparison</summary><section aria-label="Report comparison"><h2>Comparison selection</h2><p>{comparisonIds.length} selected (up to 3). Real comparison needs confirmed measurement identity, units, dates and range matching from the AI service. Selected uploads are not analyzed or matched by names.</p>{comparisonIds.length>0&&<button className="secondary" onClick={()=>setComparisonIds([])}>Clear selection</button>}<button className="secondary" onClick={async()=>{const c=controller();try{const result=await api('/reports/comparison-demo',{signal:c.signal});if(alive.current&&!c.signal.aborted)setDemo(result);}catch(e){if(!failure(e))setError(e.message);}finally{requests.current.delete(c);}}}>Show dedicated synthetic comparison</button>{demo&&<><p className="demo-banner">DEMO — {demo.limitations}</p><div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable report table"><table><caption>Dedicated synthetic comparison; selected reports are not used</caption><thead><tr><th scope="col">Case</th><th scope="col">2026-01-01</th><th scope="col">2026-02-01</th><th scope="col">Compatibility</th></tr></thead><tbody>{demo.rows.map(r=><tr key={r.name}><th scope="row">{r.name}</th><td>{r.a.value??'Missing'} {r.a.unit}</td><td>{r.b.value??'Missing'} {r.b.unit}</td><td>{r.compatible?'Compatible':'Incompatible'}: {r.reason}</td></tr>)}</tbody></table></div></>}</section>
+    </details>
     {confirming && <ReportDeleteDialog busy={deleting} error={deleteError} onClose={() => setConfirming(false)} onConfirm={remove} />}
   </section>;
 }

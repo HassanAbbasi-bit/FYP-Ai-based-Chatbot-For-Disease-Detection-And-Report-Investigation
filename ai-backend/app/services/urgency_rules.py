@@ -1,9 +1,9 @@
 import re
 from typing import List, Tuple, Optional
 
-# Clinician-reviewed emergency red-flag indicators
+# Emergency escalation heuristics; not a clinically validated diagnosis.
 RED_FLAG_PATTERNS = [
-    (r"\b(crushing\s+chest\s+pain|chest\s+pressure|radiating\s+to\s+(left\s+)?arm|radiating\s+to\s+jaw)\b", "Severe cardiovascular distress / potential myocardial infarction"),
+    (r"\b(crushing\s+chest\s+pain|severe\s+chest\s+pain|chest\s+pressure|radiating\s+to\s+(left\s+)?arm|radiating\s+to\s+jaw)\b", "Severe cardiovascular distress / potential myocardial infarction"),
     (r"\b(face\s+droop(ing)?|slurred\s+speech|one[\s-]sided\s+weakness|sudden\s+numbness|loss\s+of\s+speech)\b", "Signs of acute stroke (FAST protocol)"),
     (r"\b(thunderclap\s+headache|worst\s+headache\s+of\s+my\s+life|sudden\s+severe\s+headache)\b", "Potential intracranial hemorrhage or acute neurological event"),
     (r"\b(stiff\s+neck\s+with\s+fever|confusion\s+with\s+fever|inability\s+to\s+bend\s+neck)\b", "Signs of potential acute meningitis"),
