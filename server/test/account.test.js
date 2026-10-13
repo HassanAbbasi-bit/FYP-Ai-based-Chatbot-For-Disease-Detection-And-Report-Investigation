@@ -25,3 +25,30 @@ test("consent blocks real transfers and withdrawal removes permission without de
   await a.request("/api/account", { method: "PUT", body }); await assertConsent(f.connection, user._id, "reports");
   const next = (await a.request("/api/account")).data; await a.request("/api/account", { method: "PUT", body: update(next) }); await assert.rejects(assertConsent(f.connection, user._id, "reports")); assert.ok(await f.User.findById(user._id));
 });
+
+test("an older account without persisted settings defaults can save consent once and retains conflict protection", async () => {
+  const legacy = client(f);
+  await legacy.bootstrap();
+  assert.equal((await legacy.request('/api/auth/register', { method: 'POST', body: { name: 'Legacy fixture', email: 'legacy@profile.test', password: 'Synthetic-password-123' } })).status, 201);
+  const user = await f.User.findOne({ email: 'legacy@profile.test' });
+  await f.User.collection.updateOne({ _id: user._id }, { $unset: { privacyVersion: '', consent: '', healthContext: '', contextFence: '', deletionState: '' } });
+  const data = (await legacy.request('/api/account')).data;
+  assert.equal(data.version, 0);
+  assert.equal(data.consent.chat, false);
+  assert.equal(data.consent.reports, false);
+  const body = update(data, { consent: { chat: true, reports: true, profile: false, noticeVersion: data.noticeVersion } });
+  const results = await Promise.all([
+    legacy.request('/api/account', { method: 'PUT', body }),
+    legacy.request('/api/account', { method: 'PUT', body }),
+  ]);
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+  const reloaded = (await legacy.request('/api/account')).data;
+  assert.equal(reloaded.version, 1);
+  assert.equal(reloaded.consent.chat, true);
+  assert.equal(reloaded.consent.reports, true);
+  const stored = await f.User.collection.findOne({ _id: user._id });
+  assert.equal(stored.privacyVersion, 1);
+  assert.equal(stored.consent.chat, true);
+  assert.equal(stored.consent.reports, true);
+  assert.equal((await legacy.request('/api/account', { method: 'PUT', body })).status, 409);
+});

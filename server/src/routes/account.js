@@ -19,7 +19,12 @@ function accountRoutes({ connection, config, reports }) {
     if (!b || Array.isArray(b) || Object.keys(b).some((k) => !keys.includes(k)) || keys.some((k) => !(k in b)) || typeof b.name !== "string" || !b.name.trim() || b.name.length > 80 || !Number.isInteger(b.expectedVersion) || b.expectedVersion < 0) throw new ReportError(400, "INVALID_INPUT", "Supply a display name, optional context, consent and current settings version.");
     const health = b.healthContext, consent = b.consent;
     if (!health || Array.isArray(health) || Object.keys(health).some((k) => !["medications", "allergies", "conditions"].includes(k)) || ["medications", "allergies", "conditions"].some((k) => !(k in health) || health[k] !== null && (typeof health[k] !== "string" || health[k].length > 500)) || !consent || Array.isArray(consent) || Object.keys(consent).some((k) => !["chat", "reports", "profile", "noticeVersion"].includes(k)) || ["chat", "reports", "profile"].some((k) => typeof consent[k] !== "boolean") || consent.noticeVersion !== NOTICE_VERSION) throw new ReportError(400, "INVALID_INPUT", "Use optional text up to 500 characters or null, and explicit consent decisions for the current notice.");
-    const saved = await User.findOneAndUpdate({ _id: req.user._id, deletionState: { $ne: "pending" }, privacyVersion: b.expectedVersion }, { $set: { name: b.name.trim(), healthContext: health, consent: { ...consent, decidedAt: new Date() } }, $inc: { privacyVersion: 1, contextFence: 1 } }, { returnDocument: "after", runValidators: true });
+    // Hydrated defaults show version zero for older documents where the field
+    // was never persisted. Match that first save atomically, not later revisions.
+    const versionFilter = b.expectedVersion === 0
+      ? { $or: [{ privacyVersion: 0 }, { privacyVersion: { $exists: false } }] }
+      : { privacyVersion: b.expectedVersion };
+    const saved = await User.findOneAndUpdate({ _id: req.user._id, deletionState: { $ne: "pending" }, ...versionFilter }, { $set: { name: b.name.trim(), healthContext: health, consent: { ...consent, decidedAt: new Date() } }, $inc: { privacyVersion: 1, contextFence: 1 } }, { returnDocument: "after", runValidators: true });
     if (!saved) throw new ReportError(409, "SETTINGS_CONFLICT", "Settings changed in another tab. Reload before saving again.");
     res.json({ saved: true, version: saved.privacyVersion });
   });
