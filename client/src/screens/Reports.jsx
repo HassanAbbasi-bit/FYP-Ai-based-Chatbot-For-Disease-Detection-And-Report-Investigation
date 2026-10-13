@@ -3,9 +3,12 @@ import { reportsApi, formatSize } from "../api/reports";
 import ReportDetail from "../components/ReportDetail";
 import ReportDeleteDialog from "../components/ReportDeleteDialog";
 import { extractionApi } from "../api/extractions";
+import { api } from '../api/client';
 
 export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenChat }) {
   const [rows, setRows] = useState([]);
+  const [filters,setFilters]=useState({q:'',from:'',to:'',status:''}), filterRef=useRef({});
+  const [comparisonIds,setComparisonIds]=useState([]),[demo,setDemo]=useState(null);
   const [cursor, setCursor] = useState(null);
   const [limits, setLimits] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +46,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     const version = ++listVersion.current, c = controller();
     setLoading(true); setError("");
     try {
-      const data = await reportsApi.list(nextCursor, c.signal);
+      const data = await reportsApi.list(nextCursor, c.signal,filterRef.current);
       if (!alive.current || c.signal.aborted || version !== listVersion.current) return;
       setRows((old) => {
         const map = new Map((nextCursor ? old : []).map((report) => [report.id, report]));
@@ -87,7 +90,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     try {
       const data = await reportsApi.upload(file, uploadId.current, c.signal);
       if (!alive.current || c.signal.aborted) return;
-      setNotice("Uploaded — analysis is not connected yet.");
+      setNotice("Uploaded — ready for extraction and review.");
       setFile(null); uploadId.current = null; if (input.current) input.current.value = "";
       await load(); await open(data.report.id);
     } catch (err) {
@@ -105,6 +108,7 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
       listVersion.current += 1; setLoading(false);
       detailController.current?.abort(); setSelected(null); setOpening(false); setConfirming(false);
       setRows((old) => old.filter((report) => report.id !== id)); setNotice("Report and private original deleted.");
+      setComparisonIds(old=>old.filter(value=>value!==id));
     } catch (err) { if (!failure(err)) setDeleteError(err.message); }
     finally { requests.current.delete(c); deleteBusy.current = false; if (alive.current) setDeleting(false); }
   }
@@ -117,8 +121,8 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     finally { requests.current.delete(c); busy.current = false; if (alive.current) setUploading(false); }
   }
   return <section className="chat-panel history-panel" aria-labelledby="reports-title">
-    <h1 id="reports-title">Private report library</h1>
-    <p className="intro">Files are saved privately to your account. Uploading does not extract values or provide medical analysis. File checks are not malware scanning.</p>
+    <h1 id="reports-title">Blood CP reports</h1>
+    <p className="intro">Upload a Blood CP / CBC image or PDF. Extract the entries, check them against the original, then request an AI interpretation or ask questions about your saved report.</p>
     <button className="secondary" disabled={uploading || loggingOut} onClick={createSample}>Create synthetic review sample</button>
     <p className="hint">The synthetic sample requires demo mode to be enabled on this server. Its values are available only for this dedicated sample.</p>
     <form onSubmit={upload} className="report-upload">
@@ -132,17 +136,19 @@ export default function Reports({ onExpired, loggingOut, onDirtyChange, onOpenCh
     </form>
     <div className="reports-layout">
       <section aria-label="Saved reports">
+        <form onSubmit={e=>{e.preventDefault();filterRef.current=filters;load();}}><label>Search report names<input maxLength={120} value={filters.q} onChange={e=>setFilters({...filters,q:e.target.value})}/></label><label>Uploaded from (UTC)<input type="date" value={filters.from} onChange={e=>setFilters({...filters,from:e.target.value})}/></label><label>Uploaded through (UTC)<input type="date" value={filters.to} onChange={e=>setFilters({...filters,to:e.target.value})}/></label><label>Status<select value={filters.status} onChange={e=>setFilters({...filters,status:e.target.value})}><option value="">All</option><option value="uploaded">Uploaded</option><option value="uploading">Upload incomplete</option><option value="deleting">Deletion pending</option></select></label><button disabled={loading}>Apply filters</button><p className="hint">Filters use upload dates, not specimen/test dates.</p></form>
         <div className="thread-heading"><h2>Saved reports</h2><button className="secondary" onClick={() => load()} disabled={loading || uploading || deleting || loggingOut}>Refresh reports</button></div>
         {loading && <p role="status">Loading reports...</p>}
         {error && <div className="error" role="alert"><p>{error}</p><button className="secondary" onClick={() => load()} disabled={loading}>Retry report list</button></div>}
-        {!loading && !rows.length && !error && <p className="empty">No reports yet. Upload a synthetic test file to begin.</p>}
+        {!loading && !rows.length && !error && <p className="empty">No reports yet. Upload your first Blood CP image or PDF to begin.</p>}
         <ul className="report-list">{rows.map((report) => <li key={report.id}><button className={`history-item ${selected?.id === report.id ? "selected" : ""}`} aria-current={selected?.id === report.id ? "true" : undefined} onClick={() => open(report.id)} disabled={deleting || loggingOut}>
-          <span>{report.displayName}</span><small>{report.fileType || "Validation incomplete"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleDateString()}</small><small>{report.status === "uploaded" ? "Uploaded — analysis is not connected yet." : report.status === "deleting" ? "Deletion pending" : "Upload incomplete"}</small>
-        </button></li>)}</ul>
+          <span>{report.displayName}</span><small>{report.fileType || "Validation incomplete"} · {formatSize(report.size)} · {new Date(report.createdAt).toLocaleDateString()}</small><small>{report.status === "uploaded" ? "Uploaded — ready for extraction and review." : report.status === "deleting" ? "Deletion pending" : "Upload incomplete"}</small>
+        </button><label><input type="checkbox" checked={comparisonIds.includes(report.id)} disabled={!comparisonIds.includes(report.id)&&comparisonIds.length>=3} onChange={e=>setComparisonIds(old=>e.target.checked?[...old,report.id]:old.filter(id=>id!==report.id))}/>Select {report.displayName} for comparison</label></li>)}</ul>
         {cursor && <button className="secondary" onClick={() => load(cursor)} disabled={loading || deleting || loggingOut}>Load more reports</button>}
       </section>
       <div>{opening ? <p role="status">Opening report...</p> : selected ? <ReportDetail key={selected.id} report={selected} onExpired={onExpired} onDirtyChange={dirtyChanged} onOpenChat={context=>{if(guard())onOpenChat?.(context);}} onDelete={() => { if (guard()) { setDeleteError(""); setConfirming(true); } }} busy={deleting || loggingOut} /> : <p className="empty">Select a saved report to open its details.</p>}</div>
     </div>
+    <section aria-label="Report comparison"><h2>Comparison selection</h2><p>{comparisonIds.length} selected (up to 3). Real comparison needs confirmed measurement identity, units, dates and range matching from the AI service. Selected uploads are not analyzed or matched by names.</p>{comparisonIds.length>0&&<button className="secondary" onClick={()=>setComparisonIds([])}>Clear selection</button>}<button className="secondary" onClick={async()=>{const c=controller();try{const result=await api('/reports/comparison-demo',{signal:c.signal});if(alive.current&&!c.signal.aborted)setDemo(result);}catch(e){if(!failure(e))setError(e.message);}finally{requests.current.delete(c);}}}>Show dedicated synthetic comparison</button>{demo&&<><p className="demo-banner">DEMO — {demo.limitations}</p><div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable report table"><table><caption>Dedicated synthetic comparison; selected reports are not used</caption><thead><tr><th scope="col">Case</th><th scope="col">2026-01-01</th><th scope="col">2026-02-01</th><th scope="col">Compatibility</th></tr></thead><tbody>{demo.rows.map(r=><tr key={r.name}><th scope="row">{r.name}</th><td>{r.a.value??'Missing'} {r.a.unit}</td><td>{r.b.value??'Missing'} {r.b.unit}</td><td>{r.compatible?'Compatible':'Incompatible'}: {r.reason}</td></tr>)}</tbody></table></div></>}</section>
     {confirming && <ReportDeleteDialog busy={deleting} error={deleteError} onClose={() => setConfirming(false)} onConfirm={remove} />}
   </section>;
 }

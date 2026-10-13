@@ -1,16 +1,14 @@
 import re
+import secrets
 from fastapi import Header, HTTPException, status
 from app.config import settings
 
 def verify_internal_auth(x_internal_key: str = Header(None)):
     """
     Validates internal service key between Express backend and FastAPI.
-    Allows local development without blocking when debugging.
+    Requires the configured service key, including in development.
     """
-    if settings.DEBUG and (x_internal_key is None or x_internal_key == "dev"):
-        return True
-    
-    if x_internal_key != settings.INTERNAL_API_KEY:
+    if not settings.INTERNAL_API_KEY or not x_internal_key or not secrets.compare_digest(x_internal_key.encode("utf-8"), settings.INTERNAL_API_KEY.encode("utf-8")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized internal service call. Invalid X-Internal-Key."

@@ -44,8 +44,8 @@ async function getToken() {
   return tokenRequest;
 }
 
-export async function api(path, { method = "GET", body, signal, formData, headers = {} } = {}) {
-  if (method === "GET") return request(path, { signal });
+export async function api(path, { method = "GET", body, signal, formData, headers = {}, timeoutMs = 15000 } = {}) {
+  if (method === "GET") return request(path, { signal, timeoutMs });
   const send = async () => {
     const version = sessionVersion;
     const token = await getToken();
@@ -55,6 +55,7 @@ export async function api(path, { method = "GET", body, signal, formData, header
       headers: { ...headers, ...(formData ? {} : { "Content-Type": "application/json" }), "x-csrf-token": token },
       body: formData || JSON.stringify(body || {}),
       signal,
+      timeoutMs,
       ...(formData ? { timeoutMs: 120000 } : {}),
     });
   };

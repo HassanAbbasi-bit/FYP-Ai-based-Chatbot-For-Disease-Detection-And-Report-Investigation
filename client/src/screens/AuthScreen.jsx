@@ -41,10 +41,10 @@ export default function AuthScreen({ onSignedIn, notice }) {
   }
   return (
     <section className="chat-panel auth-panel" aria-labelledby="auth-title">
-      <p className="eyebrow">FYP · DEVELOPMENT</p>
+      <div className="brand auth-brand"><span className="brand-mark" aria-hidden="true">◉</span><div>Blood CP<span>REPORT INTELLIGENCE</span></div></div>
       <h1 id="auth-title">{registering ? "Create your account" : "Sign in"}</h1>
-      <p className="demo-banner">Demo mode — AI is not connected.</p>
-      <p className="intro">Sign in to test the chat. No medical analysis is performed.</p>
+      <p className="demo-banner">Private account workspace. AI availability is shown after sign-in.</p>
+      <p className="intro">Understand your Blood CP report with a private space for reviewed values, AI conversations, and questions for your doctor.</p>
       {notice && <p role="status">{notice}</p>}
       {error && <p className="error" role="alert" id="auth-error">{error}</p>}
       <form onSubmit={submit} aria-describedby={error ? "auth-error" : undefined}>

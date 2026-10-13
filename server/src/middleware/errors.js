@@ -1,7 +1,7 @@
 function fail(res, status, code, message) { return res.status(status).json({ error: { code, message } }); }
 function errorHandler(connection) {
   return (error, req, res, next) => {
-    if (res.headersSent) return next(error);
+    if (res.headersSent) { console.error('REQUEST_COMPLETION_FAILED'); if(!res.writableEnded)res.destroy(); return; }
     if (error.type === "entity.too.large") return fail(res, 413, "BODY_TOO_LARGE", "Request body exceeds the 100 KB limit.");
     if (error.type === "entity.parse.failed") return fail(res, 400, "INVALID_JSON", "Request body must be valid JSON.");
     if (error.code === "EBADCSRFTOKEN") return fail(res, 403, "CSRF_INVALID", "Your security token expired. Please retry.");

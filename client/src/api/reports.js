@@ -1,6 +1,6 @@
 import { api } from "./client.js";
 export const reportsApi = {
-  list: (cursor, signal) => api(`/reports${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }),
+  list: (cursor, signal, filters = {}) => { const query=new URLSearchParams(Object.entries({...filters,...(cursor?{cursor}:{})}).filter(([,v])=>v));return api(`/reports${query.size?'?'+query:''}`,{signal}); },
   detail: (id, signal) => api(`/reports/${id}`, { signal }),
   remove: (id, signal) => api(`/reports/${id}`, { method: "DELETE", signal }),
   upload: (file, uploadId, signal) => {

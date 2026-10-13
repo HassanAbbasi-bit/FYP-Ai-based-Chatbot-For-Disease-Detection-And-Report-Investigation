@@ -10,6 +10,8 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
   await Analysis.init();
   let closed = false, polling = false;
   const active = new Set();
+  const gateway = require('./ai-gateway').aiGateway({config:reports.config,connection});
+  const realEnabled = reports.config.extractionProvider === 'fastapi';
   const transaction = async work => { let value; await connection.transaction(async session => { value = await work(session); }); return value; };
   async function scoped(scope, session) {
     const report = await reports.Report.findOne({ ...scope, status: 'uploaded' }).select('+sampleVersion +sha256').session(session);
@@ -27,11 +29,13 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
       if (report.reviewVersion !== reviewVersion) throw error(409,'REVIEW_CHANGED','Reload the latest reviewed revision first.');
       const review = await ReportReview.findOne({ ownerId: scope.ownerId, reportId: scope._id, version: reviewVersion, resultId: report.currentResultId, status: 'reviewed' }).session(session);
       if (!review) throw error(409,'REVIEW_REQUIRED','Save a user-reviewed revision before requesting analysis.');
-      if (!await eligible(report)) throw error(503,'ANALYSIS_UNAVAILABLE','Analysis of corrected report data needs the confirmed AI contract. Only the dedicated synthetic sample has a demo.');
+      const demo = await eligible(report);
+      if (!demo && !realEnabled) throw error(503,'ANALYSIS_UNAVAILABLE','Connect the AI service to interpret reviewed reports.');
+      if (!review.rows.some(r=>!r.removed)) throw error(409,'REVIEW_REQUIRED','Keep at least one reviewed entry for analysis.');
       if (await Analysis.countDocuments({ reportId: report._id }).session(session) >= 20) throw error(409,'ATTEMPT_LIMIT','This report has reached its 20 analysis attempts.');
       if (await Analysis.exists({ reportId: report._id, state: { $in: ['queued','running'] } }).session(session)) throw error(409,'ANALYSIS_BUSY','An analysis attempt is already pending.');
       report.analysisFence = (report.analysisFence || 0) + 1; await report.save({ session });
-      const [created] = await Analysis.create([{ ownerId: scope.ownerId, reportId: report._id, reviewId: review._id, reviewVersion, resultId: report.currentResultId, requestId, state: 'queued', origin: 'synthetic-demo' }], { session });
+      const [created] = await Analysis.create([{ ownerId: scope.ownerId, reportId: report._id, reviewId: review._id, reviewVersion, resultId: report.currentResultId, requestId, state: 'queued', origin: demo ? 'synthetic-demo' : 'fastapi' }], { session });
       return created;
     });
     if (autoRun) void tick();
@@ -39,20 +43,29 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
   }
   async function run(job) {
     try {
+      let providerOutput;
+      if (job.origin === 'fastapi') {
+        await assertConsent(connection,job.ownerId,'reports');
+        const report = await scoped({_id:job.reportId,ownerId:job.ownerId});
+        if(report.reviewVersion!==job.reviewVersion||String(report.currentResultId)!==String(job.resultId)) throw error(409,'REVIEW_CHANGED','Revision changed.');
+        const review = await ReportReview.findOne({_id:job.reviewId,ownerId:job.ownerId,status:'reviewed'}).lean();
+        if(!review)throw error(409,'REVIEW_CHANGED','Review unavailable.');
+        providerOutput = await gateway.explain(job.ownerId,job.reportId,review);
+      }
       await transaction(async session => {
         const current = await Analysis.findOne({ _id: job._id, state: 'running', leaseToken: job.leaseToken }).session(session);
         if (!current) return;
         await accountFence(connection, job.ownerId, session); await assertConsent(connection, job.ownerId, 'reports', session);
         const report = await scoped({ _id: job.reportId, ownerId: job.ownerId }, session);
         if (report.reviewVersion !== job.reviewVersion || String(report.currentResultId) !== String(job.resultId)) throw error(409,'REVIEW_CHANGED','Revision changed.');
-        if (!await eligible(report)) throw error(503,'ANALYSIS_UNAVAILABLE','Demo unavailable.');
+        if (job.origin === 'synthetic-demo' && !await eligible(report)) throw error(503,'ANALYSIS_UNAVAILABLE','Demo unavailable.');
         const review = await ReportReview.findOne({ _id: job.reviewId, ownerId: job.ownerId, status: 'reviewed' }).session(session);
         if (!review) throw error(409,'REVIEW_CHANGED','Review unavailable.');
         report.analysisFence = (report.analysisFence || 0) + 1; await report.save({ session });
-        current.output = { rows: review.rows.filter(r => !r.removed).map(r => ({ id: r.id, testName: r.testName, rawValue: r.rawValue, units: r.units, referenceRange: r.referenceRange, reportDate: r.reportDate, unknown: r.unknown, unreadable: r.unreadable, flag: null, explanation: 'Synthetic workflow demonstration: this row copies the saved review. No medical interpretation or range flag was generated.' })),
+        current.output = providerOutput || { rows: review.rows.filter(r => !r.removed).map(r => ({ id: r.id, testName: r.testName, rawValue: r.rawValue, units: r.units, referenceRange: r.referenceRange, reportDate: r.reportDate, unknown: r.unknown, unreadable: r.unreadable, flag: null, explanation: 'Synthetic workflow demonstration: this row copies the saved review. No medical interpretation or range flag was generated.' })),
           sources: [], questions: ['Are these reviewed entries complete and accurate?'], escalation: null,
           limitations: ['DEMO — dedicated synthetic sample only.', 'User-reviewed means checked by the account owner, not clinical validation.', 'No AI model, medical interpretation, diagnosis, approved range flags or source retrieval is connected. Missing values remain unknown.'] };
-        current.state = 'succeeded'; current.completedAt = new Date(); current.leaseToken = null; current.leaseUntil = null; await current.save({ session });
+        current.modelVersion=providerOutput?.modelVersion||null; current.promptVersion=providerOutput?'reviewed-blood-cp-v1':null; current.state = 'succeeded'; current.completedAt = new Date(); current.leaseToken = null; current.leaseUntil = null; await current.save({ session });
       });
     } catch (e) { await Analysis.updateOne({ _id: job._id, state: 'running', leaseToken: job.leaseToken }, { $set: { state: 'failed', completedAt: new Date(), errorCode: e instanceof ReportError ? e.code : 'PROCESSING_FAILED', leaseToken: null, leaseUntil: null } }).catch(() => {}); }
   }
@@ -61,14 +74,14 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
     try {
       await Analysis.updateMany({ state: 'running', leaseUntil: { $lt: new Date() } }, { $set: { state: 'failed', errorCode: 'INTERRUPTED', completedAt: new Date(), leaseToken: null, leaseUntil: null } });
       while (!closed && active.size < 2) {
-        const job = await Analysis.findOneAndUpdate({ state: 'queued' }, { $set: { state: 'running', leaseToken: randomUUID(), leaseUntil: new Date(Date.now()+30000) } }, { sort: { createdAt: 1 }, returnDocument: 'after' });
+        const job = await Analysis.findOneAndUpdate({ state: 'queued' }, { $set: { state: 'running', leaseToken: randomUUID(), leaseUntil: new Date(Date.now()+(reports.config.aiRequestTimeoutMs || 485000)+30000) } }, { sort: { createdAt: 1 }, returnDocument: 'after' });
         if (!job) break;
         const promise = run(job).finally(() => active.delete(promise)); active.add(promise);
       }
     } catch { /* Persisted jobs remain recoverable after a database outage. */ } finally { polling = false; }
   }
-  async function read(scope) { const report = await scoped(scope); const jobs = await Analysis.find({ ownerId: scope.ownerId, reportId: scope._id }).sort({ createdAt: -1, _id: -1 }).limit(20).lean(); return { available: await eligible(report), realAvailable: false, analyses: jobs.map(j => publicAnalysis(j, report)) }; }
-  async function cancel(scope, id) { await scoped(scope); await Analysis.updateOne({ _id: id, reportId: scope._id, ownerId: scope.ownerId, state: { $in: ['queued','running'] } }, { $set: { state: 'cancelled', completedAt: new Date(), leaseToken: null, leaseUntil: null } }); }
+  async function read(scope) { const report = await scoped(scope); const jobs = await Analysis.find({ ownerId: scope.ownerId, reportId: scope._id }).sort({ createdAt: -1, _id: -1 }).limit(20).lean(); return { available: realEnabled || await eligible(report), realAvailable: realEnabled, demo: await eligible(report), analyses: jobs.map(j => publicAnalysis(j, report)) }; }
+  async function cancel(scope, id) { return transaction(async session=>{await scoped(scope,session);await accountFence(connection,scope.ownerId,session);const job=await Analysis.findOne({_id:id,reportId:scope._id,ownerId:scope.ownerId}).session(session);if(!job)throw reportNotFound();if(['queued','running'].includes(job.state)){job.state='cancelled';job.completedAt=new Date();job.leaseToken=null;job.leaseUntil=null;await job.save({session});}return{cancelled:job.state==='cancelled',state:job.state};}); }
   const timer = autoRun ? setInterval(() => void tick(), 1000) : null; timer?.unref();
   if (autoRun) await tick();
   return { start, read, cancel, tick, Analysis, close: async () => { closed = true; clearInterval(timer); while (polling) await new Promise(r => setTimeout(r,10)); await Promise.allSettled([...active]); } };

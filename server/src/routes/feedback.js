@@ -1,0 +1,12 @@
+const express=require('express'),{csrfSynchronisedProtection,limiter}=require('../middleware/security'),{ReportError,reportNotFound}=require('../services/report-errors'),{fail}=require('../middleware/errors');
+function feedbackRoutes(connection){const router=express.Router(),Feedback=require('../models/Feedback').feedbackModel(connection),id=/^[a-f\d]{24}$/i;
+ router.use(limiter(30,60000,req=>String(req.user._id)),csrfSynchronisedProtection);
+ router.put('/',async(req,res)=>{const b=req.body;if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['kind','targetId','helpful','unsupported','comment'].includes(k))||!['message','analysis'].includes(b.kind)||typeof b.targetId!=='string'||!id.test(b.targetId)||typeof b.helpful!=='boolean'||typeof b.unsupported!=='boolean'||b.comment!==null&&(typeof b.comment!=='string'||b.comment.length>500))throw new ReportError(400,'INVALID_INPUT','Choose helpful/not helpful, an unsupported response choice and optional comment up to 500 characters.');
+ await connection.transaction(async session=>{
+  await require('../services/consent').accountFence(connection,req.user._id,session);let association;
+  if(b.kind==='message'){const {Message,Conversation}=require('../models/Conversation').conversationModels(connection),m=await Message.findOne({_id:b.targetId,ownerId:req.user._id,role:'assistant'}).session(session);if(!m)throw reportNotFound();const c=await Conversation.findOneAndUpdate({_id:m.conversationId,ownerId:req.user._id},{$inc:{feedbackFence:1}},{session,returnDocument:'after'});if(!c)throw reportNotFound();association={conversationId:c._id,...(c.reportId?{reportId:c.reportId,reviewVersion:c.reviewVersion}:{})};}
+  else{const a=await require('../models/Analysis').analysisModel(connection).findOne({_id:b.targetId,ownerId:req.user._id,state:'succeeded'}).session(session);if(!a)throw reportNotFound();const r=await require('../models/Report').reportModel(connection).updateOne({_id:a.reportId,ownerId:req.user._id,status:'uploaded'},{$inc:{analysisFence:1}},{session});if(!r.modifiedCount)throw reportNotFound();association={reportId:a.reportId,reviewVersion:a.reviewVersion};}
+  await Feedback.findOneAndUpdate({ownerId:req.user._id,kind:b.kind,targetId:b.targetId},{$set:{...association,helpful:b.helpful,unsupported:b.unsupported,comment:b.comment}}, {session,upsert:true,runValidators:true});
+ });res.json({saved:true});});
+ router.use((e,req,res,next)=>e instanceof ReportError?fail(res,e.status,e.code,e.message):next(e));return router;}
+module.exports={feedbackRoutes};

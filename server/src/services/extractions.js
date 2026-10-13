@@ -33,7 +33,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
       const id = new mongoose.Types.ObjectId(), sequence = (report.extractionSequence || 0) + 1;
       await Report.updateOne({ _id: report._id, status: "uploaded" }, { $set: { activeExtractionId: id, extractionSequence: sequence } }, { session });
       const [created] = await Job.create([{ _id: id, reportId: report._id, ownerId: scope.ownerId, requestId, sequence, state: "queued", origin, sourceHash: report.sha256,
-        expectedReviewVersion: expectedVersion, leaseUntil: new Date(Date.now() + 90000) }], { session });
+        expectedReviewVersion: expectedVersion, leaseUntil: new Date(Date.now() + Math.max(150000, config.extractionTimeoutMs + 20000)) }], { session });
       return created;
     });
     if (autoRun) kick();
@@ -71,7 +71,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
   async function run(job) {
     const controller = new AbortController(), token = randomUUID();
     const work = (async () => {
-      const claimed = await Job.findOneAndUpdate({ _id: job._id, state: "queued" }, { $set: { state: "running", leaseToken: token, startedAt: new Date(), leaseUntil: new Date(Date.now() + 90000) } }, { returnDocument: "after" }).select("+sourceHash");
+      const claimed = await Job.findOneAndUpdate({ _id: job._id, state: "queued" }, { $set: { state: "running", leaseToken: token, startedAt: new Date(), leaseUntil: new Date(Date.now() + Math.max(150000, config.extractionTimeoutMs + 20000)) } }, { returnDocument: "after" }).select("+sourceHash");
       if (!claimed) return;
       let timer;
       try {
@@ -129,6 +129,7 @@ async function createExtractionService({ connection, reports, adapter, autoRun =
   async function save(scope, { resultId, expectedVersion, rows, markReviewed }) {
     return transaction(async (session) => {
       const report = await owned(scope, session);
+      await require('./consent').accountFence(connection,scope.ownerId,session);
       if (String(report.currentResultId) !== resultId || (report.reviewVersion || 0) !== expectedVersion) throw conflict();
       if (expectedVersion >= 200) throw new ReportError(429, "REVIEW_LIMIT", "This report reached its 200-review-revision limit.");
       const result = await Result.findOne({ _id: resultId, reportId: report._id, ownerId: scope.ownerId }).session(session);

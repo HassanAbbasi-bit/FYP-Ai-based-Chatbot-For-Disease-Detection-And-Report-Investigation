@@ -3,12 +3,17 @@ const { csrfSynchronisedProtection, limiter } = require("../middleware/security"
 const { ReportError } = require("../services/report-errors");
 const { NOTICE_VERSION } = require("../services/consent");
 const { fail } = require("../middleware/errors");
-function accountRoutes({ connection, config }) {
+function accountRoutes({ connection, config, reports }) {
   const router = express.Router(), User = connection.models.User;
   router.use(limiter(60, 60000, (req) => String(req.user._id)));
   router.use((req, res, next) => ["GET", "HEAD"].includes(req.method) ? next() : csrfSynchronisedProtection(req, res, next));
+  router.get('/ai-status', async (req,res)=>{
+    const configured=config.chatProvider==='fastapi'||config.extractionProvider==='fastapi';
+    if(!configured)return res.json({configured:false,reachable:false,modelReady:false,ocrReady:false});
+    try{const signal=AbortSignal.timeout(8000);const response=await fetch(`${config.aiServiceUrl}/api/health`,{signal,redirect:'error',headers:{'X-Internal-Key':config.aiInternalKey}});if(!response.ok)throw new Error();const d=await require('../services/extraction-adapters').limitedJson(response,signal,16384);res.json({configured:true,reachable:true,modelReady:d.ollama_connected===true&&Array.isArray(d.available_models)&&d.available_models.includes(d.active_model),ocrReady:d.ocr_available===true,model:typeof d.active_model==='string'?d.active_model.slice(0,120):null});}catch{res.json({configured:true,reachable:false,modelReady:false,ocrReady:false});}
+  });
   router.get("/", (req, res) => res.json({ name: req.user.name, healthContext: req.user.healthContext, consent: req.user.consent, version: req.user.privacyVersion,
-    capabilities: { chat: config.chatProvider === "fastapi" ? "configured-fastapi" : "demo", symptoms: config.chatProvider === "fastapi", extractionDemo: config.extractionDemoEnabled }, noticeVersion: NOTICE_VERSION }));
+    capabilities: { chat: config.chatProvider === "fastapi" ? "configured-fastapi" : config.chatProvider==='off'?'unavailable':'demo', symptoms: config.chatProvider === "fastapi", extractionDemo: config.extractionDemoEnabled }, noticeVersion: NOTICE_VERSION }));
   router.put("/", async (req, res) => {
     const b = req.body, keys = ["name", "healthContext", "consent", "expectedVersion"];
     if (!b || Array.isArray(b) || Object.keys(b).some((k) => !keys.includes(k)) || keys.some((k) => !(k in b)) || typeof b.name !== "string" || !b.name.trim() || b.name.length > 80 || !Number.isInteger(b.expectedVersion) || b.expectedVersion < 0) throw new ReportError(400, "INVALID_INPUT", "Supply a display name, optional context, consent and current settings version.");
@@ -18,6 +23,9 @@ function accountRoutes({ connection, config }) {
     if (!saved) throw new ReportError(409, "SETTINGS_CONFLICT", "Settings changed in another tab. Reload before saving again.");
     res.json({ saved: true, version: saved.privacyVersion });
   });
+  router.get('/dashboard',async(req,res)=>{const ownerId=req.user._id;const [conversations,reportsCount,reviewedCount]=await Promise.all([require('../models/Conversation').conversationModels(connection).Conversation.countDocuments({ownerId}),require('../models/Report').reportModel(connection).countDocuments({ownerId,status:'uploaded'}),require('../models/Extraction').extractionModels(connection).ReportReview.distinct('reportId',{ownerId,status:'reviewed'})]);res.json({conversations,reports:reportsCount,reportsWithReviewedHistory:reviewedCount.length});});
+  router.delete('/conversations',async(req,res)=>{if(!req.body||Array.isArray(req.body)||Object.keys(req.body).length!==1||req.body.confirm!=='DELETE ALL CONVERSATIONS')throw new ReportError(400,'CONFIRMATION_REQUIRED','Confirm deleting all conversations.');if(!reports)throw new ReportError(503,'SERVICE_UNAVAILABLE','Deletion is unavailable.');await reports.deletion.conversations(req.user._id);res.json({deleted:true});});
+  router.delete('/',limiter(5,15*60000,req=>String(req.user._id)),async(req,res)=>{const b=req.body;if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['password','confirm'].includes(k))||b.confirm!=='DELETE MY ACCOUNT'||typeof b.password!=='string'||b.password.length<1||b.password.length>128)throw new ReportError(400,'CONFIRMATION_REQUIRED','Provide your current password and DELETE MY ACCOUNT confirmation.');if(!reports)throw new ReportError(503,'SERVICE_UNAVAILABLE','Deletion is unavailable.');await reports.deletion.mark(req.user._id,b.password);await require('node:util').promisify(req.session.destroy).call(req.session);res.clearCookie(config.cookieName,{httpOnly:true,secure:config.production,sameSite:'lax',path:'/'});res.status(202).json({accepted:true,message:'Account access is blocked. Private files and records are being removed; interrupted deletion resumes when storage recovers.'});});
   router.use((e, req, res, next) => e instanceof ReportError ? fail(res, e.status, e.code, e.message) : next(e));
   return router;
 }

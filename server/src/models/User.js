@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
   privacyVersion: { type: Number, default: 0 },
   contextFence: { type: Number, default: 0, select: false },
   deletionState: { type: String, enum: ["active", "pending"], default: "active" },
+  deletionRequestedAt: Date,
 }, { timestamps: true, strict: "throw", bufferCommands: false });
 userSchema.set("toJSON", { transform(doc, value) { delete value.passwordHash; delete value.reportCount; delete value.reportBytes; return value; } });
 function publicUser(user) {

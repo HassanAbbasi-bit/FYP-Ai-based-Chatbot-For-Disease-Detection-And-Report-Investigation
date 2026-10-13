@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+import logging
 from app.models.schemas import ChatRequest, ChatResponse
 from app.core.security import verify_internal_auth, sanitize_medical_text
 from app.core.ollama_client import ollama_client
@@ -55,8 +56,9 @@ async def process_chat_message(request: ChatRequest):
                 ],
                 urgency_level=urgency
             )
-        except Exception:
-            # Fallback if model call fails
+        except Exception as error:
+            logging.getLogger(__name__).warning("CHAT_MODEL_FAILED type=%s", type(error).__name__)
+            # Explicit development fallback is rejected by Express.
             pass
 
     # 3. Fallback structured response for development & testing
