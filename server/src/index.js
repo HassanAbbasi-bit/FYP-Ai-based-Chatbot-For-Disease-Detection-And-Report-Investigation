@@ -7,6 +7,7 @@ const { createApp } = require("./app");
 const { userSchema } = require("./models/User");
 const { initializeConversations } = require("./models/Conversation");
 const { createReportService } = require("./services/reports");
+const { startupError } = require("./services/startup-error");
 
 async function start() {
   let config;
@@ -36,7 +37,7 @@ async function start() {
     process.exitCode = exitCode;
   }
   try {
-    await connection.openUri(config.mongoUri, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 10000, maxPoolSize: 10 });
+    await connection.openUri(config.mongoUri, { serverSelectionTimeoutMS: 30000, connectTimeoutMS: 15000, socketTimeoutMS: 30000, maxPoolSize: 10 });
     await connection.model("User", userSchema).init();
     await initializeConversations(connection);
     reports = await createReportService({ connection, config });
@@ -55,21 +56,7 @@ async function start() {
     console.log(`Server running at http://${config.host}:${config.port}`);
     server.on("error", () => { console.error("HTTP server could not start. Check the configured port."); shutdown(1); });
   } catch (error) {
-    if (stage === "http") {
-      console.error(error.code === "EADDRINUSE"
-        ? `Port ${config.port} is already in use. Stop the other backend before starting this one.`
-        : "HTTP server could not start. Check the configured port.");
-    } else if (error.code === "STORAGE_UNAVAILABLE") {
-      console.error("Private report storage is unavailable or already used by another server. Check REPORT_STORAGE_DIR permissions and stop duplicate servers.");
-    } else if (error.code === "REPLICA_SET_REQUIRED") {
-      console.error(error.message); // Authored message, never a database error payload.
-    } else if (["querySrv", "queryTxt", "getaddrinfo"].includes(error.syscall)) {
-      console.error("Database DNS lookup failed. Check your network DNS or use the full Atlas non-SRV connection string.");
-    } else if (error.code === 18) {
-      console.error("Database authentication failed. Check the database username, password, and authentication database privately in server/.env.");
-    } else {
-      console.error("Database initialization failed. Check server/.env, Atlas IP access, and database permissions; credentials are never printed.");
-    }
+    console.error(startupError(error, stage, config.port));
     await shutdown(1);
     return;
   }
