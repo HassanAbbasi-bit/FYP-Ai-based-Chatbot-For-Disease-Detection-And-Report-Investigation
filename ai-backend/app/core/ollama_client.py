@@ -1,4 +1,5 @@
 import httpx
+import logging
 from typing import Dict, Any, List, Optional
 from app.config import settings
 
@@ -47,15 +48,18 @@ class OllamaClient:
         model: str = settings.DEFAULT_MODEL,
         temperature: float = 0.2,
         max_tokens: Optional[int] = 450,
-        json_mode: bool = False
+        json_mode: bool = False,
+        response_schema: Optional[Dict[str, Any]] = None,
+        context_tokens: Optional[int] = None
     ) -> str:
         """
         Calls Ollama generate endpoint with hardware-optimized inference options.
         """
         options: Dict[str, Any] = {
             "temperature": temperature,
-            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
+            "use_mmap": True,
             "top_p": 0.9,
             "top_k": 40
         }
@@ -69,7 +73,9 @@ class OllamaClient:
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
             "options": options
         }
-        if json_mode:
+        if response_schema is not None:
+            payload["format"] = response_schema
+        elif json_mode:
             payload["format"] = "json"
         if system_prompt:
             payload["system"] = system_prompt
@@ -80,7 +86,8 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("response", "")
             else:
-                return f"Error from Ollama (status {res.status_code}): {res.text}"
+                logging.getLogger(__name__).warning("MODEL_REQUEST_REJECTED HTTP=%s", res.status_code)
+                raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."
@@ -95,15 +102,17 @@ class OllamaClient:
         messages: List[Dict[str, str]],
         model: str = settings.DEFAULT_MODEL,
         temperature: float = 0.2,
-        max_tokens: Optional[int] = 350
+        max_tokens: Optional[int] = 350,
+        context_tokens: Optional[int] = None
     ) -> str:
         """
         Calls Ollama chat endpoint with persistent memory and token limiting.
         """
         options: Dict[str, Any] = {
             "temperature": temperature,
-            "num_ctx": settings.OLLAMA_NUM_CTX,
+            "num_ctx": context_tokens or settings.OLLAMA_NUM_CTX,
             "num_thread": settings.OLLAMA_NUM_THREAD,
+            "use_mmap": True,
             "top_p": 0.9,
             "top_k": 40
         }
@@ -123,7 +132,8 @@ class OllamaClient:
             if res.status_code == 200:
                 return res.json().get("message", {}).get("content", "")
             else:
-                return f"Error from Ollama (status {res.status_code}): {res.text}"
+                logging.getLogger(__name__).warning("MODEL_REQUEST_REJECTED HTTP=%s", res.status_code)
+                raise RuntimeError("The configured model request was rejected.")
         except httpx.ConnectError:
             raise ConnectionError(
                 f"Cannot connect to Ollama at {self.base_url}. Please ensure Ollama is installed and running."

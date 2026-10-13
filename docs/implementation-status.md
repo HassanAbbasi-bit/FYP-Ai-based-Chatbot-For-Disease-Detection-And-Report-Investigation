@@ -1,3 +1,9 @@
+# Current checkpoint: Blood CP AI integration
+
+Frontend and FastAPI contracts for general chat, symptom assessment, image/PDF extraction, reviewed report interpretation and revision-bound report chat are connected. The interface is redesigned for Blood CP / CBC report investigation with desktop/mobile navigation and separate backend/model/OCR readiness. See [current startup and limitations](blood-cp-integration.md). Previous checkpoint notes follow for history.
+
+---
+
 # Application implementation status
 
 Inspection base: main e55c299 includes merged authentication, conversations, private uploads and extraction/review checkpoints. Working tree was clean. Existing verification recorded 89 backend tests, 14 frontend tests and ten extraction browser workflows; these will be rerun after relevant changes.

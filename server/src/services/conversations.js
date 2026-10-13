@@ -28,7 +28,7 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       await require("./consent").accountFence(connection, scope.ownerId, session);
       if (conversation.reportId) {
         const context = await require('./report-context').reportContext(connection, scope.ownerId, conversation.reportId, conversation.reviewVersion, session, true);
-        if (context.report.sampleVersion !== 'synthetic-v1' || !connection.fypReportDemo) throw new (require('./report-errors').ReportError)(503,'REPORT_CHAT_UNAVAILABLE','The AI service has no confirmed corrected-report chat contract. This conversation is bound to your report; no report data has been sent.');
+        if (!allowAi && (context.report.sampleVersion !== 'synthetic-v1' || !connection.fypReportDemo)) throw new (require('./report-errors').ReportError)(503,'REPORT_CHAT_UNAVAILABLE','Connect the AI service to ask questions about this reviewed report.');
         await require('./consent').assertConsent(connection, scope.ownerId, 'reports', session);
       } else if (allowAi) await require("./consent").assertConsent(connection, scope.ownerId, "chat", session);
       const jobScope = { ownerId: scope.ownerId, conversationId: scope._id, requestId };
@@ -75,7 +75,8 @@ function conversationService(connection, { generateReply = createDemoReply, leas
       const c = await Conversation.findOne(scope).lean();
       if (c?.reportId) {
         const context = await require('./report-context').reportContext(connection, scope.ownerId, c.reportId, c.reviewVersion);
-        reply = { mode: 'demo', reply: `DEMO — synthetic report conversation, reviewed revision ${c.reviewVersion}. No medical reasoning is connected. Saved entries: ${context.review.rows.filter(r=>!r.removed).map(r=>`${r.testName}: ${r.rawValue ?? 'unknown'} ${r.units ?? '(unit unknown)'}`).join('; ')}`.slice(0,4000), structured: { origin: 'synthetic-demo', sources: [], disclaimer: 'This demonstration copies synthetic reviewed data. It does not answer medical questions.' } };
+        if (allowAi) reply = await generateReply({content,conversationId:String(c._id),requestId,ownerId:scope.ownerId,history,reportContext:{report_id:String(c.reportId),review_version:c.reviewVersion,rows:require('./ai-gateway').reviewedRows(context.review)}});
+        else reply = { mode: 'demo', reply: `DEMO — synthetic report conversation, reviewed revision ${c.reviewVersion}. No medical reasoning is connected. Saved entries: ${context.review.rows.filter(r=>!r.removed).map(r=>`${r.testName}: ${r.rawValue ?? 'unknown'} ${r.units ?? '(unit unknown)'}`).join('; ')}`.slice(0,4000), structured: { origin: 'synthetic-demo', sources: [], disclaimer: 'This demonstration copies synthetic reviewed data. It does not answer medical questions.' } };
       } else reply = await generateReply({ content, conversationId: scope._id.toString(), requestId, ownerId: scope.ownerId, history });
       if (!["demo", ...(allowAi ? ["ai"] : [])].includes(reply?.mode) || typeof reply.reply !== "string" || !reply.reply.trim() || reply.reply.length > 4000) throw new Error("Invalid reply");
     } catch (error) {

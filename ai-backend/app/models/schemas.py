@@ -12,6 +12,7 @@ class HealthResponse(BaseModel):
     active_model: str = "llama3.2:3b"
     available_models: List[str] = Field(default_factory=list)
     gpu_available: bool = False
+    ocr_available: bool = False
     details: Optional[Dict[str, Any]] = None
 
 # -------------------------------------------------------------
@@ -49,6 +50,7 @@ class PossibleCause(BaseModel):
     rationale: str
 
 class SymptomAssessmentResponse(BaseModel):
+    origin: str = "rules"
     assessment_id: str
     extracted_symptoms: List[str]
     urgency_level: str  # "low", "moderate", "high", "emergency"

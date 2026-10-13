@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from app.config import settings
 from app.core.ollama_client import ollama_client
 from app.models.schemas import HealthResponse
+from pathlib import Path
+import shutil
 
 router = APIRouter(tags=["Health"])
 
@@ -21,7 +23,8 @@ async def get_health_status():
         ollama_connected=connected,
         active_model=settings.DEFAULT_MODEL,
         available_models=models,
-        gpu_available=True,
+        gpu_available=False,
+        ocr_available=Path(settings.TESSERACT_CMD).is_file() or shutil.which("tesseract") is not None,
         details={
             "debug": settings.DEBUG,
             "ollama_base_url": settings.OLLAMA_BASE_URL,

@@ -5,7 +5,7 @@ function analysisModel(connection) {
     reviewId: { type: mongoose.Schema.Types.ObjectId, required: true }, reviewVersion: { type: Number, required: true },
     resultId: { type: mongoose.Schema.Types.ObjectId, required: true }, requestId: { type: String, required: true },
     state: { type: String, enum: ['queued','running','succeeded','failed','cancelled'], required: true },
-    origin: { type: String, enum: ['synthetic-demo'], required: true },
+    origin: { type: String, enum: ['synthetic-demo','fastapi'], required: true },
     leaseToken: String, leaseUntil: Date, completedAt: Date, errorCode: String,
     modelVersion: { type: String, default: null }, promptVersion: { type: String, default: null },
     output: mongoose.Schema.Types.Mixed,

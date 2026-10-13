@@ -28,7 +28,7 @@ def test_health_endpoint():
 def test_chat_endpoint_normal():
     response = client.post(
         "/api/chat",
-        headers={"X-Internal-Key": "dev"},
+        headers={"X-Internal-Key": "synthetic-internal-test-key"},
         json={
             "conversation_id": "test_conv",
             "message": "I have had a mild headache since yesterday.",
@@ -43,7 +43,7 @@ def test_chat_endpoint_normal():
 def test_chat_endpoint_red_flag():
     response = client.post(
         "/api/chat",
-        headers={"X-Internal-Key": "dev"},
+        headers={"X-Internal-Key": "synthetic-internal-test-key"},
         json={
             "conversation_id": "test_conv",
             "message": "I have crushing chest pain radiating to my left arm.",
@@ -55,10 +55,16 @@ def test_chat_endpoint_red_flag():
     assert data["urgency_level"] == "emergency"
     assert "CRITICAL" in data["reply"]
 
-def test_symptom_assessment():
+def test_symptom_assessment(monkeypatch):
+    import json
+    from app.core.ollama_client import ollama_client
+    async def health(): return {"connected": True}
+    async def generate(**kwargs): return json.dumps({"possible_causes": [{"condition": "Synthetic possibility", "likelihood": "possible", "rationale": "Fixture only"}], "recommended_questions_for_doctor": ["Synthetic question"], "self_care_notes": "Fixture only"})
+    monkeypatch.setattr(ollama_client, "check_health", health)
+    monkeypatch.setattr(ollama_client, "generate_response", generate)
     response = client.post(
         "/api/symptoms/assess",
-        headers={"X-Internal-Key": "dev"},
+        headers={"X-Internal-Key": "synthetic-internal-test-key"},
         json={
             "symptoms": ["headache", "fatigue"],
             "duration": "2 days"
