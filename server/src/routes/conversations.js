@@ -70,7 +70,7 @@ function conversationRoutes({ connection, limits, generation }) {
       const rows = await Message.find(filter).sort({ sequence: -1 }).limit(limit + 1).session(session).lean();
       const page = rows.slice(0, limit).reverse();
       const job = c.activeRequestId ? await ChatRequest.findOne({ ownerId: req.user._id, conversationId: c._id, requestId: c.activeRequestId }).session(session).lean() : null;
-      return { conversation: publicConversation(c), ...(context ? { reportContext: { reportId: String(c.reportId), reviewVersion: c.reviewVersion, outdated: context.outdated, name: context.report.displayName, realAvailable: generation?.allowAi === true } } : {}), messages: page.map(publicMessage), nextCursor: rows.length > limit ? String(page[0].sequence) : null,
+      return { conversation: publicConversation(c), ...(context ? { reportContext: { reportId: String(c.reportId), reviewVersion: c.reviewVersion, outdated: context.outdated, name: context.report.displayName, realAvailable: generation?.allowAi === true, rows: require('../services/ai-gateway').reviewedRows(context.review) } } : {}), messages: page.map(publicMessage), nextCursor: rows.length > limit ? String(page[0].sequence) : null,
         activeRequest: job ? { requestId: job.requestId, content: job.content, status: job.status === "pending" && job.leaseUntil > new Date() ? "pending" : "failed", retryAfterMs: Math.max(0, (job.leaseUntil?.getTime() || 0) - Date.now()) } : null };
     });
     res.json(data);
