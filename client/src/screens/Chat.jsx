@@ -3,6 +3,7 @@ import useConversations from "../hooks/useConversations";
 import ConversationSidebar from "../components/ConversationSidebar";
 import ConversationDialog from "../components/ConversationDialog";
 import MessageHistory from "../components/MessageHistory";
+import ReviewedMeasurements from "../components/ReviewedMeasurements";
 
 export default function Chat({ onExpired, loggingOut, logoutError, mode = "demo", initialContext }) {
   const chat = useConversations(onExpired, initialContext);
@@ -34,6 +35,7 @@ export default function Chat({ onExpired, loggingOut, logoutError, mode = "demo"
             <button className="secondary" onClick={() => setDialog({ action: "delete", conversation })} disabled={!conversation || chat.working || loggingOut}>Delete</button>
           </div></div>
           {conversation?.reportId&&<p className="demo-banner">Reviewed report · revision {conversation.reviewVersion}. {thread.reportContext?.outdated?'Outdated: open a new conversation for the current revision.':mode==='configured-fastapi'?'Uses your saved reviewed entries.':'Dedicated synthetic demonstration.'}</p>}
+          {thread.reportContext?.rows&&<ReviewedMeasurements rows={thread.reportContext.rows} caption={`Report values attached to chat - revision ${thread.reportContext.reviewVersion}`}/>}
           <MessageHistory thread={thread} selected={chat.selected} onOlder={chat.loadOlder} onReload={chat.reload} onExpired={onExpired}/>
           <p className="sending" role="status">{thread.sending ? "Sending message..." : thread.pending ? "Your message is kept for a safe retry." : ""}</p>
           {thread.error && <div className="error" role="alert"><p>{thread.error}</p>{thread.pending ? <button onClick={() => chat.send(true)} disabled={thread.sending || loggingOut}>Retry message</button> : thread.loaded && <button className="secondary" onClick={chat.reload} disabled={thread.loading || loggingOut}>Refresh messages</button>}</div>}

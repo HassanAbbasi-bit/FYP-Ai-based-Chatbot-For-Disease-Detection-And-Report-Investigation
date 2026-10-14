@@ -4,6 +4,7 @@ import shutil
 import json
 from datetime import datetime
 from pathlib import Path
+from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 
 from app.config import settings
@@ -37,13 +38,13 @@ async def extract_medical_report(file: UploadFile = File(...)):
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        raw_text, pages = extract_text_from_pdf_or_image(temp_file_path)
+        raw_text, pages = await run_in_threadpool(extract_text_from_pdf_or_image, temp_file_path)
         if not pages or "OCR Unprocessed" in raw_text or "Tesseract error" in raw_text:
             raise HTTPException(status_code=503, detail="Image OCR is unavailable. Install/configure Tesseract and retry.")
         tests, validation_flags, critical_alerts, report_date = await extract_structured_tests_ai(raw_text)
         if report_date:
             parsed_date = None
-            for pattern in ["%Y-%m-%d", "%Y/%m/%d", "%d-%b-%Y", "%d/%b/%Y", "%d-%B-%Y", "%d/%B/%Y"]:
+            for pattern in ["%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y", "%d-%b-%Y", "%d/%b/%Y", "%d-%B-%Y", "%d/%B/%Y"]:
                 try:
                     parsed_date = datetime.strptime(report_date, pattern).date().isoformat()
                     break

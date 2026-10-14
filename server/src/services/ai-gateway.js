@@ -1,6 +1,7 @@
 const { limitedJson } = require("./extraction-adapters");
 const { assertConsent } = require("./consent");
 const { ReportError } = require("./report-errors");
+const { reviewedRangeFlag, assertReviewedMetadata } = require('./reviewed-range');
 function text(v, max = 4000, nullable = false) { if (nullable && v === null) return null; if (typeof v !== "string" || v.length > max) throw new ReportError(502, "INVALID_AI_RESPONSE", "The AI service returned an invalid response."); return v; }
 function strings(v, maxCount = 10) { if (!Array.isArray(v) || v.length > maxCount) throw new ReportError(502, "INVALID_AI_RESPONSE", "The AI service returned an invalid response."); return v.map((s) => text(s, 500)); }
 function urgency(v) { if (!["low", "moderate", "high", "emergency"].includes(v)) throw new ReportError(502, "INVALID_AI_RESPONSE", "The AI service returned an invalid urgency field."); return v; }
@@ -26,11 +27,12 @@ function aiGateway({ config, connection }) {
     finally { active--; }
   }
   async function chat({ content, conversationId, ownerId, history, reportContext }) {
+    if (reportContext) assertReviewedMetadata(reportContext.rows);
     if (reportContext) await assertConsent(connection,ownerId,'reports');
     const data = await post(ownerId, reportContext ? '/api/reports/reviewed/chat' : "/api/chat", { message: content, conversation_id: conversationId, history, ...(reportContext || {}) });
     const disclaimer = text(data.disclaimer, 1000);
     if (/development mode/i.test(disclaimer)) throw new ReportError(503, "MODEL_UNAVAILABLE", "The service reported development fallback instead of a live model response. No replacement answer was fabricated.");
-    return { mode: "ai", reply: text(data.reply), structured: { origin: "fastapi", urgency: urgency(data.urgency_level), followUps: strings(data.suggested_follow_ups), disclaimer, sources: [], modelVersion: null } };
+    return { mode: "ai", reply: text(data.reply), structured: { origin: "fastapi", urgency: urgency(data.urgency_level), ...(reportContext?{urgencyBasis:'message-symptoms'}:{}), followUps: strings(data.suggested_follow_ups), disclaimer, sources: [], modelVersion: null } };
   }
   async function symptoms(ownerId, body) {
     const data = await post(ownerId, "/api/symptoms/assess", body);
@@ -42,10 +44,12 @@ function aiGateway({ config, connection }) {
   }
   async function explain(ownerId, reportId, review) {
     const rows = reviewedRows(review);
+    assertReviewedMetadata(rows);
     const data = await post(ownerId, '/api/reports/reviewed/explain', { report_id: String(reportId), review_version: review.version, rows }, 'reports');
     if (data.report_id !== String(reportId) || data.review_version !== review.version || data.origin !== 'ollama' || !Array.isArray(data.findings) || data.findings.length > 100 || !Array.isArray(data.flags) || data.flags.length !== rows.length) throw new ReportError(502,'INVALID_AI_RESPONSE','The AI returned a mismatched report revision or invalid findings.');
     const flags = new Map();
     for (const f of data.flags) { if (!rows.some(r=>r.id===f.id) || flags.has(f.id) || !['low','high','normal','inconclusive'].includes(f.flag)) throw new ReportError(502,'INVALID_AI_RESPONSE','Invalid report flags.'); flags.set(f.id,f.flag); }
+    if (rows.some(r => flags.get(r.id) !== reviewedRangeFlag(r)) || data.findings.some(f => !rows.some(r => r.testName === f.test_name))) throw new ReportError(502,'INVALID_AI_RESPONSE','The AI findings or range flags do not match the saved reviewed entries. No interpretation was saved.');
     const conditions = data.possible_conditions ?? [];
     if (!Array.isArray(conditions) || conditions.length > 3) throw new ReportError(502,'INVALID_AI_RESPONSE','Invalid possible conditions.');
     const possibleConditions = conditions.map(c => {

@@ -29,6 +29,7 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
       if (report.reviewVersion !== reviewVersion) throw error(409,'REVIEW_CHANGED','Reload the latest reviewed revision first.');
       const review = await ReportReview.findOne({ ownerId: scope.ownerId, reportId: scope._id, version: reviewVersion, resultId: report.currentResultId, status: 'reviewed' }).session(session);
       if (!review) throw error(409,'REVIEW_REQUIRED','Save a user-reviewed revision before requesting analysis.');
+      if (realEnabled) require('./reviewed-range').assertReviewedMetadata(review.rows);
       const demo = await eligible(report);
       if (!demo && !realEnabled) throw error(503,'ANALYSIS_UNAVAILABLE','Connect the AI service to interpret reviewed reports.');
       if (!review.rows.some(r=>!r.removed)) throw error(409,'REVIEW_REQUIRED','Keep at least one reviewed entry for analysis.');
@@ -50,6 +51,8 @@ async function createAnalysisService({ connection, reports, autoRun = true }) {
         if(report.reviewVersion!==job.reviewVersion||String(report.currentResultId)!==String(job.resultId)) throw error(409,'REVIEW_CHANGED','Revision changed.');
         const review = await ReportReview.findOne({_id:job.reviewId,ownerId:job.ownerId,status:'reviewed'}).lean();
         if(!review)throw error(409,'REVIEW_CHANGED','Review unavailable.');
+        const submitted = await Analysis.updateOne({_id:job._id,state:'running',leaseToken:job.leaseToken},{$set:{providerStartedAt:new Date(),inputRowCount:review.rows.filter(r=>!r.removed).length}});
+        if (!submitted.modifiedCount) return;
         providerOutput = await gateway.explain(job.ownerId,job.reportId,review);
       }
       await transaction(async session => {

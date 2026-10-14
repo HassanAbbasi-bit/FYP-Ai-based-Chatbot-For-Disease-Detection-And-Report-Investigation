@@ -26,7 +26,7 @@ export default function MessageHistory({ thread, selected, onOlder, onReload, on
     {!count && !thread.loading && thread.loaded && <p className="empty">No messages yet. Send a test message.</p>}
     {thread.messages.map((message) => <article key={message.id} className={`bubble ${message.role}`}>
       <strong>{message.role === "user" ? "You" : message.mode === "ai" ? "Assistant · Service response" : "Assistant · DEMO"}</strong><p>{message.content}</p>
-      {message.structured && <>{message.structured.urgency&&<p className="demo-banner">Service urgency: {message.structured.urgency}</p>}<ul>{message.structured.followUps?.map((q, i) => <li key={i}>{q}</li>)}</ul><p>{message.structured.disclaimer}</p></>}
+      {message.structured && <>{message.structured.urgency&&<p className="demo-banner">{(thread.reportContext||message.structured.urgencyBasis==='message-symptoms')?'Message symptom check':'Service urgency'}: {message.structured.urgency}{(thread.reportContext||message.structured.urgencyBasis==='message-symptoms')&&'. This does not assess abnormal report values.'}</p>}<ul>{message.structured.followUps?.map((q, i) => <li key={i}>{q}</li>)}</ul><p>{message.structured.disclaimer}</p></>}
       {message.role==='assistant'&&!message.optimistic&&<Feedback kind="message" targetId={message.id} onExpired={onExpired}/>}
       {message.role === "user" && thread.pending?.requestId === message.requestId && <small>{thread.sending ? "Sending..." : thread.pending.status === "pending" ? "Awaiting confirmation" : "Needs retry"}</small>}
     </article>)}
