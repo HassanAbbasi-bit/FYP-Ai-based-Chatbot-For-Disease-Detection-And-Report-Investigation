@@ -1,5 +1,6 @@
 import re
 import json
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 import pymupdf as fitz
@@ -8,7 +9,6 @@ import pytesseract
 
 from app.config import settings
 from app.core.security import sanitize_medical_text
-from app.services.range_checker import evaluate_lab_value
 from app.core.ollama_client import ollama_client
 
 if Path(settings.TESSERACT_CMD).exists():
@@ -54,7 +54,7 @@ NAME_FIXES = {
     r"mean corpuscuar volume|mean corpuscular volume|mcv\b": ("MCV (Mean Corpuscular Volume)", "fL", "81 - 101"),
     r"mch\b": ("MCH", "pg", "27 - 32"),
     r"mchc\b": ("MCHC", "g/dL", "31.5 - 34.5"),
-    r"rbc count|total rbc count|red blood cell count|red blood cell": ("RBC Count", "10^6/uL", "4.5 - 5.5"),
+    r"rbc\.?\s+count|total rbc count|red blood cell count|red blood cell": ("RBC Count", "10^6/uL", "4.5 - 5.5"),
     r"neutrophils?": ("Neutrophils", "%", "40 - 80"),
     r"lymphocytes?|lymohoeyts": ("Lymphocytes", "%", "20 - 40"),
     r"eosinophils?|essiophte": ("Eosinophils", "%", "1 - 6"),
@@ -81,10 +81,80 @@ def normalize_unit(raw_unit: Optional[str], default_unit: Optional[str] = None) 
 
 def canonicalize_test_name(name: str) -> Tuple[str, Optional[str], Optional[str]]:
     lower = name.lower()
+    # Qualitative smear observations are separate from numeric cell counts.
+    if re.search(r"platelets? on smear", lower):
+        return "Platelets on Smear", None, None
+    if re.search(r"rbc morphology", lower):
+        return "RBC Morphology", None, None
+    if re.search(r"w[be]cs? on ps", lower):
+        return "WBCs on PS", None, None
     for pattern, (canonical, def_unit, def_range) in NAME_FIXES.items():
         if re.search(pattern, lower):
             return canonical, def_unit, def_range
     return name.strip(), None, None
+
+
+def ocr_table_image(image: Image.Image) -> str:
+    # Automatic page segmentation can emit an entire name column before the
+    # result column. A single text block preserves row alignment in CBC scans.
+    text = pytesseract.image_to_string(image, config="--oem 1 --psm 6", timeout=30)
+    if len(parse_table_rows(text)) >= 4:
+        return text
+    alternate = pytesseract.image_to_string(image, config="--oem 1", timeout=30)
+    return max((text, alternate), key=lambda candidate: len(parse_table_rows(candidate)))
+
+
+def parse_table_rows(text: str) -> List[Dict[str, Any]]:
+    rows = []
+    number = r"(?:[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"
+    row_pattern = re.compile(rf"^([A-Za-z][A-Za-z\s.()&{{}}%/-]{{1,60}}?)\s+([<>]=?\s*)?({number})(?=\s|$)(.*)$")
+    range_pattern = re.compile(rf"({number}\s*(?:-|\u2013|to)\s*{number})")
+    for line in text.splitlines():
+        line = line.strip()
+        if re.match(r"^(?:male|female)\s*:", line, re.I):
+            if rows:
+                rows[-1]['reference_range'] = ((rows[-1].get('reference_range') or '') + '; ' + line).strip('; ')
+            continue
+        qualitative = re.match(r"^(Platelets? on Smear|RBC Morphology|W[BE]Cs? on PS)\s+(.+)$", line, re.I)
+        if qualitative:
+            rows.append(dict(name=qualitative[1], value=qualitative[2], unit=None, reference_range=None))
+            continue
+        match = row_pattern.match(line)
+        if not match:
+            continue
+        name, comparator, value, tail = match.groups()
+        _, known_unit, _ = canonicalize_test_name(name)
+        # Only recognized CBC measurements may enter through this fast path;
+        # age, lab numbers, phone numbers and other header metadata are excluded.
+        if known_unit is None:
+            continue
+        tail = tail.strip()
+        range_match = range_pattern.search(tail)
+        unit, reference = None, None
+        if range_match:
+            before = tail[:range_match.start()].strip()
+            after = tail[range_match.end():].strip()
+            if re.search(r"\b(?:male|female)\b", before, re.I):
+                reference = tail
+            else:
+                reference = range_match[0]
+                unit = before or after or None
+        else:
+            unit = tail or None
+        rows.append(dict(name=name.strip(), value=(comparator or '') + value, unit=unit, reference_range=reference))
+    return rows
+
+
+def evaluate_source_value(value: Any, reference: Optional[str]) -> Tuple[str, bool, str]:
+    # Never repair decimals or substitute a population range for printed data.
+    original = reference or "Not specified"
+    if isinstance(value, (int, float)):
+        match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(?:-|\u2013|to)\s*(\d+(?:\.\d+)?)\s*", reference or '')
+        if match:
+            low, high = map(float, match.groups())
+            if low <= high:
+                return ('low' if value < low else 'high' if value > high else 'normal'), True, original
+    return 'inconclusive', True, original
 
 def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
     """
@@ -133,7 +203,7 @@ def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
                 enhancer = ImageEnhance.Contrast(img)
                 img = enhancer.enhance(1.8)
 
-                extracted_text = pytesseract.image_to_string(img, config="--oem 1")
+                extracted_text = ocr_table_image(img)
             pages_processed.append(1)
         except Exception:
             extracted_text = "[Image OCR Unprocessed - Tesseract error]"
@@ -142,8 +212,8 @@ def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
 
 async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], List[str], Optional[str]]:
     """
-    Extracts lab test results using llama3.2:3b with heuristic fallback,
-    standardizes test names and units, and evaluates ranges deterministically.
+    Extracts aligned OCR rows first, with a bounded model fallback.
+    Preserves printed values, units and ranges for user review.
     """
     tests: List[Dict[str, Any]] = []
     validation_flags: List[Dict[str, str]] = []
@@ -152,39 +222,13 @@ async def extract_structured_tests_ai(raw_text: str) -> Tuple[List[Dict[str, Any
 
     extracted_items = []
 
-    # 1. Primary Strategy: Ultra-Fast Table Regex Extractor (< 5ms)
-    lines = raw_text.splitlines()
-    num_pattern = r"([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"
-    row_pattern = rf"^([A-Za-z\s()&{{}}\-]{{3,45}}?)\s+{num_pattern}\s*([A-Za-z/%*.]+)?\s*(?:([0-9]+(?:\.[0-9]+)?\s*[-–to]\s*[0-9]+(?:\.[0-9]+)?))?"
-    
-    table_items = []
-    ignored_keywords = [
-        "patient", "doctor", "dr.", "test name", "hospital", "clinic", "address", 
-        "phone", "date", "sample", "seenple", "barcode", "bill", "invoice", "registered", 
-        "pathologist", "complete blood", "report status", "collection type", "avenue", 
-        "district", "delhi", "oethi", "road", "street", "pin", "zip", "tel", "city",
-        "specimen", "collected", "received", "reported", "ref by"
-    ]
-    for line in lines:
-        line_clean = line.strip()
-        match = re.search(row_pattern, line_clean)
-        if match:
-            t_name = match.group(1).strip()
-            t_val = match.group(2)
-            t_unit = match.group(3)
-            t_range = match.group(4)
-            if len(t_name) > 2 and not any(re.search(r'\b' + re.escape(kw) + r'\b', t_name.lower()) for kw in ignored_keywords) and not t_name.endswith("-"):
-                table_items.append({
-                    "name": t_name,
-                    "value": t_val,
-                    "unit": t_unit,
-                    "reference_range": t_range
-                })
+    # Preserve OCR rows before considering model extraction.
+    table_items = parse_table_rows(raw_text)
 
-    # If fast table parsing detected 4+ tests, use them immediately (runs in < 0.01s)
+    # Clear tables do not need a model request.
     if len(table_items) >= 4:
         extracted_items = table_items
-        date_match = re.search(r"(\d{1,2}[-/][A-Za-z]{3,9}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2})", raw_text)
+        date_match = re.search(r"(?:\bDATE\s*:?\s*)(\d{1,2}[-/][A-Za-z]{3,9}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})", raw_text, re.I)
         if date_match:
             report_date = date_match.group(1)
     else:
@@ -217,7 +261,7 @@ Lab Text:
 {clean_prompt_text}
 """
                 system_prompt = "Return valid JSON only. Never include conversational text."
-                raw_response = await ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=550, json_mode=True)
+                raw_response = await asyncio.wait_for(ollama_client.generate_response(prompt=prompt, system_prompt=system_prompt, temperature=0.1, max_tokens=550, json_mode=True), timeout=60)
                 
                 clean_json = raw_response.strip()
                 if "```json" in clean_json:
@@ -265,13 +309,13 @@ Lab Text:
                     continue
             except (ValueError, TypeError):
                 pass
-            if not item.get("reference_range") and (not item.get("unit") or item.get("unit").lower() in ["seenple", "sample", "na", "null"]):
+            if canonical_name not in ["Platelets on Smear", "RBC Morphology", "WBCs on PS"] and not item.get("reference_range") and (not item.get("unit") or item.get("unit").lower() in ["seenple", "sample", "na", "null"]):
                 continue
 
         seen_names.add(canonical_name)
 
-        unit = normalize_unit(item.get("unit"), default_unit)
-        ref_range = item.get("reference_range") or default_range
+        unit = item.get("unit") or None
+        ref_range = item.get("reference_range") or None
 
         # Parse numeric value if possible
         try:
@@ -279,48 +323,18 @@ Lab Text:
         except (ValueError, TypeError):
             num_val = val
 
-        # Handle common OCR decimal point missing in values
-        if isinstance(num_val, (int, float)):
-            # RBC Count: e.g. 500 -> 5.0
-            if canonical_name == "RBC Count" and 100 <= num_val <= 700:
-                num_val = round(num_val / 100.0, 2)
-            # PCT: e.g. 35 -> 0.35
-            elif canonical_name == "PCT (Plateletcrit)" and 10 <= num_val <= 90:
-                num_val = round(num_val / 100.0, 2)
-            # Hemoglobin: e.g. 172 -> 17.2
-            elif canonical_name == "Hemoglobin" and 90 <= num_val <= 250:
-                num_val = round(num_val / 10.0, 1)
-            # Hematocrit: e.g. 516 -> 51.6
-            elif canonical_name == "Hematocrit (PCV)" and 300 <= num_val <= 700:
-                num_val = round(num_val / 10.0, 1)
-            # MCV: e.g. 832 -> 83.2
-            elif canonical_name == "MCV (Mean Corpuscular Volume)" and 500 <= num_val <= 1300:
-                num_val = round(num_val / 10.0, 1)
-            # MCH: e.g. 294 -> 29.4
-            elif canonical_name == "MCH" and 200 <= num_val <= 450:
-                num_val = round(num_val / 10.0, 1)
-            # MCHC: e.g. 333 -> 33.3
-            elif canonical_name == "MCHC" and 250 <= num_val <= 450 and num_val > 100:
-                num_val = round(num_val / 10.0, 1)
-            # RDW-CV: e.g. 148 -> 14.8
-            elif canonical_name == "RDW-CV" and 100 <= num_val <= 250:
-                num_val = round(num_val / 10.0, 1)
-            # MPV: e.g. 73 -> 7.3
-            elif canonical_name == "MPV" and 50 <= num_val <= 160:
-                num_val = round(num_val / 10.0, 1)
-
-        status, needs_review, clean_range = evaluate_lab_value(num_val, ref_range, canonical_name)
+        status, needs_review, clean_range = evaluate_source_value(num_val, ref_range)
 
         test_entry = {
             "test_id": f"t{idx}",
             "name": canonical_name,
             "value": num_val,
-            "unit": unit or "N/A",
-            "reference_range": clean_range or ref_range or "Not specified",
+            "unit": unit,
+            "reference_range": ref_range,
             "status": status,
             "page": 1,
             "needs_review": needs_review,
-            "review_reason": f"Value ({num_val}) outside reference range ({clean_range})" if status in ["low", "high"] else None
+            "review_reason": "Check OCR value, units and reference range against the original report."
         }
         tests.append(test_entry)
 
@@ -339,13 +353,13 @@ Lab Text:
             })
 
         # Critical Alerts Check
-        if canonical_name == "Platelet Count" and isinstance(num_val, (int, float)):
+        if canonical_name == "Platelet Count" and unit == "/uL" and isinstance(num_val, (int, float)):
             if num_val < 50000 or (num_val < 50 and num_val > 0):
                 critical_alerts.append(f"CRITICAL: Severe thrombocytopenia detected (Platelet count: {num_val}). Immediate physician notification recommended.")
-        elif canonical_name == "Hemoglobin" and isinstance(num_val, (int, float)):
+        elif canonical_name == "Hemoglobin" and unit == "g/dL" and isinstance(num_val, (int, float)):
             if num_val < 7.0:
                 critical_alerts.append(f"CRITICAL: Severe anemia detected (Hemoglobin: {num_val} g/dL). Urgent medical assessment required.")
-        elif canonical_name == "Total Leukocyte Count (WBC)" and isinstance(num_val, (int, float)):
+        elif canonical_name == "Total Leukocyte Count (WBC)" and unit == "/uL" and isinstance(num_val, (int, float)):
             if num_val < 2000 or num_val > 30000:
                 critical_alerts.append(f"CRITICAL: Abnormal leukocyte count ({num_val} /uL) outside safety margins.")
 
