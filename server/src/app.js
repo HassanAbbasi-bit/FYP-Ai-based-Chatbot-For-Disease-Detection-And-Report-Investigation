@@ -34,7 +34,7 @@ function createApp({ config, connection, store, limits = {}, generation, reports
   });
   app.use(express.json({ limit: "100kb" }));
   const sessions = session({
-    name: config.cookieName, secret: config.sessionSecret, store,
+    name: config.cookieName, secret: config.sessionSecret, store: require('./services/session-store').normalizeSessionTouch(store),
     resave: false, saveUninitialized: false, rolling: false,
     cookie: { httpOnly: true, secure: config.production, sameSite: "lax", path: "/", maxAge: config.sessionTtlMs },
   });
