@@ -1,72 +1,78 @@
-# Blood CP � AI report investigation
+# AI-Based Chatbot For Disease Detection & Medical Report Investigation (BackEnd)
 
-A private Blood CP / CBC workspace connecting Friend 2's React/Express application with Friend 1's FastAPI/Ollama backend. Upload a report image or PDF, extract and review its entries, request an educational interpretation and ask questions about the saved reviewed revision.
-
-**Start here:** [integration setup, available features and limitations](docs/blood-cp-integration.md). Run `node scripts/configure-local-ai.cjs` to configure matching private local service keys without altering database credentials, then use `start_project.bat`. A running Ollama model and Tesseract are required for live model interpretation and image OCR respectively.
-
-Existing account data, report originals and environment credentials remain private. Automated tests use disposable databases and synthetic data. The application does not certify diagnoses or model accuracy.
+An intelligent clinical decision support and patient guidance backend service integrating local generative AI (Ollama `llama3.2:3b`), OCR document processing (Tesseract + PyMuPDF), a deterministic triage safety engine, and an Express.js API gateway with MongoDB authentication and session management.
 
 ---
 
-# FYP Health Workspace
+## 🏛️ System Architecture
 
-React/Express app with MongoDB accounts/sessions, persistent conversations, private validated uploads, extraction jobs and versioned user review. Remaining application checkpoints add optional profile/consent, configured chat/symptom adapters, dedicated synthetic revision-bound results/report conversations, filtered history/comparison selection, factual PDF export, feedback, privacy/deletion and an actual-count dashboard. The friend's `ai-backend/` is unchanged.
+This repository is structured as a coordinated backend multi-service architecture:
 
-Real chat/symptoms/extraction require explicit private configuration and live verification. Corrected-report analysis/chat, real comparison and doctor-summary contracts remain missing. Demo findings never attach to ordinary uploads. Review means user-checked, not clinical validation. No clinical/production certification is claimed. See [actual status](docs/implementation-status.md), [AI agreement](docs/ai-integration-contract.md) and [exact backend handoff](docs/backend-handoff.md).
+```
+BackEnd/
+├── ai-backend/            # [Service 1] Python FastAPI AI engine & OCR processor (Port 8000)
+│   ├── app/               # Application routes, services, models, and core logic
+│   └── requirements.txt   # Python dependencies
+├── server/                # [Service 2] Node.js Express API gateway, MongoDB auth & sessions (Port 5000)
+│   ├── src/               # Express app, auth routes, models, security middleware
+│   └── package.json       # Express dependencies
+├── docs/                  # Shared integration agreements & auth setup guides
+├── pyrightconfig.json     # Python static type checking configuration
+├── start_backend.bat      # One-click launcher for the AI service
+├── start_ollama.bat       # Launcher for the local Ollama LLM
+└── start_project.bat      # Coordinated project launcher
+```
 
-## Setup and run
+---
 
-Use Node 24 and install locked dependencies:
+## 🔌 Service Matrix & Ports
+
+| Component | Stack | Default URL / Port | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Medical AI Backend** | FastAPI / Python 3.11 | `http://localhost:8000` | Clinical symptom assessment, emergency triage, OCR extraction, lab explanations |
+| **API Docs (Swagger)** | OpenAPI / Swagger UI | `http://localhost:8000/docs` | Interactive API testing and schema documentation |
+| **API Gateway / Auth** | Express.js / Node.js | `http://localhost:5000` | User accounts, session management, CSRF protection, and gateway proxy |
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites
+* **Python 3.11+**
+* **Ollama** installed with model `llama3.2:3b` (`ollama run llama3.2:3b`)
+* **Tesseract OCR** (for image lab reports)
+* **Node.js 18+ / 24+** (for Express gateway server)
+* **MongoDB** (for user authentication and session persistence)
+
+---
+
+### 2. Start the AI Backend (Terminal 1)
+```powershell
+# From the repository root (or double-click start_backend.bat):
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
+```
+* **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+* **Health Check**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
+* **Agreed Contract**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
+
+---
+
+### 3. Start the Express Gateway (Terminal 2)
 ```powershell
 cd server
-npm.cmd ci
+npm install
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
-cd ../client
-npm.cmd ci
+npm run dev
 ```
-Edit `server/.env` privately: preserve your valid `MONGODB_URI` with an explicit application database on Atlas/replica set, a random hex `SESSION_SECRET` of at least 32 bytes, `APP_ORIGIN=http://localhost:5173`, `NODE_ENV=development`, `PORT=5000`. A standalone database lacks required transactions. Never paste/commit credentials.
+* Express Gateway: [http://127.0.0.1:5000](http://127.0.0.1:5000)
+* Liveness: [http://127.0.0.1:5000/api/health](http://127.0.0.1:5000/api/health)
+* Readiness: [http://127.0.0.1:5000/api/ready](http://127.0.0.1:5000/api/ready)
 
-Two terminals from the project root:
-```powershell
-# Terminal 1
-cd server
-npm.cmd run dev
-```
-```powershell
-# Terminal 2
-cd client
-npm.cmd run dev
-```
-Open `http://localhost:5173`. Backend is loopback port 5000. `/api/health` is liveness; `/api/ready` checks MongoDB. `npm.cmd` avoids PowerShell execution-policy issues.
+---
 
-## Short synthetic walkthrough
-
-1. Register a test account; Dashboard shows actual saved counts.
-2. Settings: optional context may stay unknown. Choose/save chat/report processing permission. Profile context is not automatically transmitted.
-3. Chat: New chat, send a synthetic message, refresh/reopen, rename/delete or leave feedback. Local development defaults to clearly labelled demo.
-4. Set `EXTRACTION_DEMO_ENABLED=true` privately and restart Express for the dedicated sample. Reports: Create synthetic review sample, Run extraction, check/correct rows, Mark reviewed. Ordinary uploads cannot acquire sample values.
-5. Refresh saved revision/results, request a synthetic result. It copies reviewed entries without clinical interpretation/range flags. Save a newer revision to see the old result outdated. Open a separate conversation bound to a selected review revision.
-6. Download factual PDF of current reviewed data. Filter history by name/upload date/status, select reports, view a separate synthetic comparison with compatibility/missing-data limitations.
-7. Settings: clear context, withdraw permission, delete all conversations with confirmation, or test password-confirmed account deletion. Individual reports delete in their details. Interrupted deletion resumes; provider/downloaded copies/backups remain separate.
-
-## Real service and deployment
-
-After confirming the friend's reachable origin/key, privately configure `AI_SERVICE_URL`, `AI_INTERNAL_KEY` and `CHAT_PROVIDER=fastapi` and/or `EXTRACTION_PROVIDER=fastapi`. React never accesses Ollama directly. Synthetic transport/schema tests do not validate live inference/clinical accuracy. Development-mode chat fallback is rejected; symptom fallback provenance is missing. No corrected-analysis endpoint is invented.
-
-See [profile/chat](docs/profile-and-chat.md), [extraction/review](docs/extraction-review.md), [results/context](docs/report-results.md), [history/PDF](docs/history-and-export.md) and [privacy/deployment preparation](docs/privacy-and-deployment.md). `EXPORT_FONT_PATH` is a readable local font (Windows Arial/Linux DejaVu defaults). Unsupported glyphs produce an explicit error; original HTML stays available. Complex bidi/PDF tagging is not verified. No public/permanent export copies.
-
-Production defaults `CHAT_PROVIDER=off`; demo chat/extraction are rejected. Deployment needs HTTPS, same-origin routing, protected MongoDB, durable private originals, fonts and reviewed proxy/backup/recovery procedures. Nothing is automatically deployed.
-
-## Checks
-
-```powershell
-cd server
-npm.cmd test
-cd ../client
-npm.cmd test
-npm.cmd run lint
-npm.cmd run build
-```
-Server tests own disposable MongoDB/private storage, never read `.env` or clear your database. Files run sequentially to bound disk/process use. The first install/test may download the official test MongoDB binary. CI uses synthetic tests without production credentials. Low temporary disk space can prevent startup; use a sufficiently sized temporary directory without deleting unrelated files.
-
-For isolated browser tests, run `node scripts/browser-test-server.js` from server instead of your real backend; it owns temporary data. Optional `BROWSER_TEST_PORT`/`BROWSER_TEST_ORIGIN` allow separate ports with matching Vite `API_PROXY_TARGET`. Stop it after testing. Verification/merge order are in status. The friend maintains [AI setup](ai-backend/README.md); starting that alone does not enable adapters. Email verification, password reset, malware scanning and distributed scaling are not implemented.
+## 🔒 Security & Clinical Guardrails
+* **Red-Flag Interceptors**: Immediate rule-based detection for critical symptoms (e.g., myocardial infarction, acute stroke, critical thrombocytopenia) bypassing model latency.
+* **Range Validation**: Deterministic numerical comparison against clinical standard bounds with automatic decimal-shift and OCR error recovery.
+* **Internal Authentication**: Secured via internal API key header (`X-Internal-Key`) for service-to-service communication.
+* **Session Security**: Cookie-based sessions with HTTP-only flags, SameSite strict enforcement, and CSRF token verification.

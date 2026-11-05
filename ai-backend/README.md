@@ -32,10 +32,3 @@ This service powers the AI backend for the Medical Chatbot & Lab Report Analyzer
 | `/api/reports/extract` | `POST` | Upload PDF/image report, OCR parsing, structured lab tests, and range flags |
 | `/api/reports/{id}/explain` | `POST` | Grounded report explanations and doctor visit questions |
 
----
-
-## 🧪 Automated Testing
-Run the test suite with:
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_api.py -v
-```

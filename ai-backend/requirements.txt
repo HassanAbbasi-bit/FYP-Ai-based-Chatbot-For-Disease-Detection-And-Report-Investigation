@@ -1,5 +1,5 @@
 # =========================================================
-# Friend 1: Medical AI Backend & Ollama Processing Service
+# Medical AI Backend & Clinical Processing Service
 # =========================================================
 
 # Web Framework & Server
@@ -23,7 +23,3 @@ Pillow>=10.2.0
 
 # Reference Retrieval & Embeddings (RAG)
 chromadb>=0.4.24
-
-# Testing & Quality Evaluation
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
