@@ -1,15 +1,16 @@
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 
 def parse_range(reference_range: Optional[str]) -> Tuple[Optional[float], Optional[float]]:
     """
-    Parses a reference range string like '13.5 - 17.5' or '< 200' or '> 50'
+    Parses a reference range string like '13.5 - 17.5' or '< 200' or '> 50' or '4,000 - 11,000'
     into (low_bound, high_bound).
     """
     if not reference_range:
         return None, None
         
-    cleaned = reference_range.strip()
+    cleaned = re.sub(r",", "", reference_range.strip())
+    cleaned = re.sub(r"\b[oO]\s*-\s*", "0 - ", cleaned)
     
     # Matches "13.5 - 17.5" or "13.5-17.5" or "13.5 to 17.5"
     range_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*(?:-|to|–)\s*([0-9]+(?:\.[0-9]+)?)", cleaned)
@@ -42,50 +43,69 @@ def parse_range(reference_range: Optional[str]) -> Tuple[Optional[float], Option
     return None, None
 
 def evaluate_lab_value(
-    value: str | float | int, 
+    value: Any, 
     reference_range: Optional[str], 
     canonical_test_name: Optional[str] = None
-) -> Tuple[str, bool, str]:
+) -> Tuple[str, bool, str, Any]:
     """
     Compares numerical lab result against reference range with automated OCR decimal scaling
     and canonical reference bounds recovery.
-    Returns: (status: "normal" | "low" | "high" | "inconclusive", needs_review: bool, clean_reference_range: str)
+    Returns: (status: "normal" | "low" | "high" | "inconclusive", needs_review: bool, clean_reference_range: str, final_value: Any)
     """
     try:
         val_str = str(value).strip().replace(",", "")
+        if re.match(r"^\s*[<>]=?", val_str):
+            return "inconclusive", True, reference_range or "Not specified", value
+
         numeric_match = re.search(r"[-+]?[0-9]*\.?[0-9]+", val_str)
         if not numeric_match:
-            return "inconclusive", True, reference_range or "Not specified"
+            return "inconclusive", True, reference_range or "Not specified", value
             
         num_val = float(numeric_match.group(0))
+
+        # 1. OCR Missing Decimal Auto-Repair for values
+        if canonical_test_name == "Hemoglobin" and num_val > 40:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "Hematocrit (PCV)" and num_val > 100:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "MCV (Mean Corpuscular Volume)" and num_val > 300:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "MCH" and num_val > 100:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "MCHC" and num_val > 100:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "RDW-CV" and num_val > 50:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "MPV" and num_val > 40:
+            num_val = round(num_val / 10.0, 2)
+        elif canonical_test_name == "RBC Count" and num_val > 20:
+            num_val = round(num_val / 10.0, 2) if num_val < 100 else round(num_val / 100.0, 2)
+
         low, high = parse_range(reference_range)
         
-        # Auto-correct OCR missing decimal point scale mismatch
-        # e.g., value=13.0, range=1300-1700 -> rescale to 13.0-17.0
-        # e.g., value=5.0, range=45-55 -> rescale to 4.5-5.5
-        # e.g., value=37.5, range=315-345 -> rescale to 31.5-34.5
-        # e.g., value=8.0, range=75-115 -> rescale to 7.5-11.5
-        if low is not None and high is not None and num_val > 0 and low > 0:
-            ratio = low / num_val
-            if 70 <= ratio <= 130:
-                low, high = round(low / 100.0, 2), round(high / 100.0, 2)
-            elif 6.5 <= ratio <= 14:
-                low, high = round(low / 10.0, 2), round(high / 10.0, 2)
-
-        # Fix OCR stray leading digits for platelets (e.g., 1150000 -> 150000)
-        if canonical_test_name == "Platelet Count":
-            if high and high > 1000000 and low and low > 300000:
-                low, high = 150000.0, 410000.0
-
-        # Fix OCR missing decimal for RDW-CV (e.g. 116-140 -> 11.6 - 14.0 or 15-145 -> 11.5 - 14.5)
-        if canonical_test_name == "RDW-CV":
-            if high and high > 100:
-                low, high = 11.5, 14.5
-
-        # Fix OCR distorted range for Hematocrit (e.g. 40.0 - 0.0 -> 0 - 40 -> snap to 40 - 50)
-        if canonical_test_name == "Hematocrit (PCV)":
-            if (low is not None and low == 0) or (high is not None and high < 45):
-                low, high = 40.0, 50.0
+        # 2. OCR Missing Decimal Auto-Repair for reference ranges
+        if canonical_test_name == "Hemoglobin" and high is not None and high > 40:
+            if low is not None and low > 40:
+                low = round(low / 10.0, 2)
+            high = round(high / 10.0, 2)
+        elif canonical_test_name == "Hemoglobin" and low is not None and low > 40:
+            low = round(low / 10.0, 2)
+        elif canonical_test_name == "RDW-CV" and high is not None and high > 50:
+            if low is not None and low > 50:
+                low = round(low / 10.0, 2)
+            high = round(high / 10.0, 2)
+        elif canonical_test_name == "MPV" and high is not None and high > 40:
+            if low is not None and low > 40:
+                low = round(low / 10.0, 2)
+            high = round(high / 10.0, 2)
+        elif canonical_test_name == "Hematocrit (PCV)":
+            if low is not None and low == 0 and high is not None and high > 30:
+                low = 36.0
+            elif (low is not None and low == 0) and (high is None or high == 0):
+                low, high = 36.0, 50.0
+        elif canonical_test_name == "Platelet Count":
+            if (high is not None and high > 1000000) or (low is not None and low > 1000000):
+                low, high = 150000.0, 450000.0
 
         # Construct clean, standardized range string
         clean_range = reference_range or "Not specified"
@@ -96,28 +116,32 @@ def evaluate_lab_value(
         elif low is not None:
             clean_range = f"> {low:g}"
 
+        # Determine status
         if low is not None and high is not None:
             if num_val < low:
-                return "low", True, clean_range
+                return "low", False, clean_range, num_val
             elif num_val > high:
-                return "high", True, clean_range
+                return "high", False, clean_range, num_val
             else:
-                return "normal", False, clean_range
+                return "normal", False, clean_range, num_val
                 
         elif high is not None:
             if num_val > high:
-                return "high", True, clean_range
+                return "high", False, clean_range, num_val
             else:
-                return "normal", False, clean_range
+                return "normal", False, clean_range, num_val
                 
         elif low is not None:
             if num_val < low:
-                return "low", True, clean_range
+                return "low", False, clean_range, num_val
             else:
-                return "normal", False, clean_range
+                return "normal", False, clean_range, num_val
+        else:
+            return "inconclusive", True, reference_range or "Not specified", num_val
                 
     except Exception:
-        return "inconclusive", True, reference_range or "Not specified"
+        return "inconclusive", True, reference_range or "Not specified", value
 
-    return "normal", False, reference_range or "Not specified"
+    return "inconclusive", True, reference_range or "Not specified", value
+
 
