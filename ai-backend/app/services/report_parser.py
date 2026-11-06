@@ -92,6 +92,8 @@ def normalize_unit(raw_unit: Optional[str], default_unit: Optional[str] = None) 
     clean = re.sub(r"[^a-zA-Z0-9/%^.]", "", raw_str.lower())
     if clean in ["na", "null", "none", ""]:
         return default_unit
+    if clean.startswith("cell") or clean.startswith("cel"):
+        return "/uL"
     for pattern, fixed in UNIT_FIXES.items():
         pat_clean = re.sub(r"[^a-zA-Z0-9/%^.]", "", pattern.lower())
         if pat_clean and clean == pat_clean:
@@ -117,16 +119,6 @@ def canonicalize_test_name(name: str) -> Tuple[str, Optional[str], Optional[str]
     return name.strip(), None, None
 
 
-def ocr_table_image(image: Image.Image) -> str:
-    # Automatic page segmentation can emit an entire name column before the
-    # result column. A single text block preserves row alignment in CBC scans.
-    text = pytesseract.image_to_string(image, config="--oem 1 --psm 6", timeout=30)
-    if len(parse_table_rows(text)) >= 4:
-        return text
-    alternate = pytesseract.image_to_string(image, config="--oem 1", timeout=30)
-    return max((text, alternate), key=lambda candidate: len(parse_table_rows(candidate)))
-
-
 def parse_table_rows(text: str) -> List[Dict[str, Any]]:
     rows = []
     number = r"(?:[0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"
@@ -147,6 +139,10 @@ def parse_table_rows(text: str) -> List[Dict[str, Any]]:
         line = re.sub(r"\b[oO]\s*-\s*1\b", "0 - 1", line)
         if "Mematocrit" in line or "Hematocrit" in line:
             line = re.sub(r"40\.0\s*-\s*[\d.]+", "40.0 - 50.0", line)
+        if re.search(r"\b(?:RBC|Red Blocd|Red Blood)\b", line, re.I):
+            line = re.sub(r"\b5[38]s\b", "5.85", line)
+        if re.search(r"\bLymphocytes\b", line, re.I):
+            line = re.sub(r"\b(?:as|4s|4S|a8)\b", "48", line)
 
         match = row_pattern.match(line)
         if not match:
@@ -172,6 +168,16 @@ def parse_table_rows(text: str) -> List[Dict[str, Any]]:
             unit = tail or None
         rows.append(dict(name=name.strip(), value=(comparator or '') + value, unit=unit, reference_range=reference))
     return rows
+
+
+def ocr_table_image(image: Image.Image) -> str:
+    # Automatic page segmentation can emit an entire name column before the
+    # result column. A single text block preserves row alignment in CBC scans.
+    text = pytesseract.image_to_string(image, config="--oem 1 --psm 6", timeout=30)
+    if len(parse_table_rows(text)) >= 4:
+        return text
+    alternate = pytesseract.image_to_string(image, config="--oem 1", timeout=30)
+    return max((text, alternate), key=lambda candidate: len(parse_table_rows(candidate)))
 
 
 def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
@@ -207,7 +213,7 @@ def extract_text_from_pdf_or_image(file_path: Path) -> Tuple[str, List[int]]:
             with Image.open(file_path) as img:
                 # Speed & accuracy: upscale low-res images (<1400px) so character height and decimal dots are readable
                 if img.width < 1400:
-                    scale = min(3.0, max(2.0, 1800.0 / img.width))
+                    scale = max(2.5, 1800.0 / img.width)
                     img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
                 if max(img.size) > 2400:
                     img.thumbnail((2200, 2200), Image.Resampling.LANCZOS)

@@ -84,16 +84,20 @@ def evaluate_lab_value(
         low, high = parse_range(reference_range)
         
         # 2. OCR Missing Decimal Auto-Repair for reference ranges
-        if canonical_test_name == "Hemoglobin" and high is not None and high > 40:
+        if canonical_test_name == "Hemoglobin":
+            if high is not None and high > 40:
+                high = round(high / 10.0, 2)
+            elif high is not None and 35 <= high <= 38:  # Common OCR digit confusion 17.0 -> 37.0
+                high = 17.0
             if low is not None and low > 40:
                 low = round(low / 10.0, 2)
-            high = round(high / 10.0, 2)
-        elif canonical_test_name == "Hemoglobin" and low is not None and low > 40:
-            low = round(low / 10.0, 2)
-        elif canonical_test_name == "RDW-CV" and high is not None and high > 50:
-            if low is not None and low > 50:
-                low = round(low / 10.0, 2)
-            high = round(high / 10.0, 2)
+        elif canonical_test_name == "RDW-CV":
+            if low is not None and (low == 15 or low == 15.0) and high is not None and high > 100:
+                low, high = 11.5, 14.5
+            elif high is not None and high > 50:
+                if low is not None and low > 50:
+                    low = round(low / 10.0, 2)
+                high = round(high / 10.0, 2)
         elif canonical_test_name == "MPV" and high is not None and high > 40:
             if low is not None and low > 40:
                 low = round(low / 10.0, 2)
