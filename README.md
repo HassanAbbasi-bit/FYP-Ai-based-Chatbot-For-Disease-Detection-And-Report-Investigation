@@ -54,7 +54,6 @@ uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
 ```
 * **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 * **Health Check**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-* **Agreed Contract**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
 
 ---
 

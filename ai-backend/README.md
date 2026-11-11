@@ -16,7 +16,6 @@ This service powers the AI backend for the Medical Chatbot & Lab Report Analyzer
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir ai-backend --host 0.0.0.0 --port 8000 --reload
 ```
 * **Interactive API Documentation (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
-* **Agreed Sample API Contract for Friend 2**: [http://localhost:8000/api/sample/contract](http://localhost:8000/api/sample/contract)
 * **Health Check**: [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
 ---
@@ -26,7 +25,6 @@ This service powers the AI backend for the Medical Chatbot & Lab Report Analyzer
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/health` | `GET` | Health status of FastAPI, GPU, and Ollama connection |
-| `/api/sample/contract` | `GET` | Complete agreed sample JSON responses for frontend development |
 | `/api/chat` | `POST` | Chat processing with conversational history and emergency triage |
 | `/api/symptoms/assess` | `POST` | Symptom intake, red-flag rule check, and calibrated causes |
 | `/api/reports/extract` | `POST` | Upload PDF/image report, OCR parsing, structured lab tests, and range flags |

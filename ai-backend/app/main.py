@@ -1,5 +1,4 @@
 import sys
-import json
 from pathlib import Path
 
 # Ensure ai-backend directory is in sys.path for direct root invocations
@@ -9,7 +8,6 @@ if _ai_dir not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.api.routes import health, chat, symptoms, reports, reviewed
@@ -42,21 +40,8 @@ async def root():
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "online",
-        "docs_url": "/docs",
-        "contract_url": "/api/sample/contract"
+        "docs_url": "/docs"
     }
-
-@app.get("/api/sample/contract")
-async def get_agreed_contract():
-    """
-    Returns the agreed sample JSON contract so Friend 2 can easily mock
-    and connect their Express & React interfaces immediately.
-    """
-    contract_file = settings.BASE_DIR / "sample_api_responses.json"
-    if contract_file.exists():
-        with open(contract_file, "r") as f:
-            return JSONResponse(content=json.load(f))
-    return {"message": "Sample responses contract not found"}
 
 if __name__ == "__main__":
     import uvicorn
