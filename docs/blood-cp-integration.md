@@ -55,3 +55,11 @@ Context memory scales with reviewed report size; short requests share a 4K conte
 Reviewed explanations use Ollama JSON-schema constrained output and Pydantic validation. Valid JSON alone is insufficient: required field types and reviewed test identity must match. Invalid output is INVALID_MODEL_OUTPUT (502); a model timeout is MODEL_TIMEOUT (504); unavailable-model errors remain separate. No failed result is replaced with fabricated findings.
 
 To run an explicit live check, generate the synthetic image with `python scripts/verify-live-ocr.py`, then run `node scripts/verify-live-ai.js` from server/. The live check uses the actual model and a disposable database, never the configured Atlas account records.
+
+---
+
+## 📚 Related Documentation
+
+- [**Architecture & API Reference**](architecture-and-api.md) — Multi-service topology, inter-service authentication, and full API contracts.
+- [**Security, Privacy & Clinical Safety**](security-and-privacy.md) — Argon2id authentication, CSRF sync, rate limits, consent governance, and clinical safety.
+
